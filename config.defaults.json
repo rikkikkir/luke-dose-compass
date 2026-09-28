@@ -1,0 +1,45 @@
+{
+  "_about": "Default settings only, never Luke's data. Change numbers here, never in prose. Each entry: value, source, note.",
+  "cycle": {
+    "defaultHours": { "value": 25.4, "source": "Rikki", "note": "Average non-24 cycle for Rikki and Luke." },
+    "averageOverCycles": { "value": 7, "source": "heuristic", "note": "Wake-to-wake spans averaged for the cycle dial." }
+  },
+  "model": {
+    "clearanceRange": {
+      "fastMultiplier": { "value": 0.8, "source": "heuristic", "note": "Half-life multiplier for the quick-clearance edge of the range." },
+      "slowMultiplier": { "value": 1.6, "source": "heuristic", "note": "Half-life multiplier for the slow edge. Wide because of Luke's kidney and liver values." }
+    },
+    "reliefWeights": {
+      "nsaid": { "value": 0.5, "source": "heuristic", "note": "Contribution of the NSAID level to estimated pain relief." },
+      "opioid": { "value": 0.75, "source": "heuristic", "note": "Contribution of the opioid level to estimated pain relief." }
+    },
+    "reliefThresholds": {
+      "covered": { "value": 0.6, "source": "heuristic", "note": "At or above: 'covered'." },
+      "thinning": { "value": 0.4, "source": "heuristic", "note": "At or above, but below 'covered': 'thinning'. Below: 'likely gap'." }
+    }
+  },
+  "observations": {
+    "opioidFollowUpMinutes": { "value": 90, "source": "heuristic", "note": "Optional pain check after an opioid dose." },
+    "painCheckHighFraction": { "value": 0.25, "source": "heuristic", "note": "A pain check at or above this share of the maximum score counts as 'high' for learning." },
+    "learningMinQualifyingChecks": { "value": 20, "source": "heuristic", "note": "Qualifying checks needed before showing Luke's observed relief window." }
+  },
+  "backup": {
+    "reminderDays": { "value": 7, "source": "heuristic", "note": "Gentle reminder when the last backup is older than this." }
+  },
+  "breathing": {
+    "normalRestingMin": { "value": 15, "source": "VCA Animal Hospitals", "note": "Breaths per minute, asleep or calmly resting." },
+    "normalRestingMax": { "value": 30, "source": "VCA Animal Hospitals", "note": "Consistently above: contact the vet." }
+  },
+  "qualityOfLife": {
+    "hhhhhmmItemMax": { "value": 10, "source": "Villalobos via VCA", "note": "Each of 7 items scored 1 to 10." },
+    "hhhhhmmAcceptableTotal": { "value": 35, "source": "Villalobos via VCA", "note": "Commonly read as acceptable. A conversation tool, never a verdict (S7)." }
+  },
+  "iris": {
+    "dogCreatinineStageUpperBounds": { "value": [1.4, 2.8, 5.0], "source": "IRIS 2023 guidelines, not verified against the official page", "note": "mg/dL. Below 1.4 = stage 1; 1.4 to 2.8 = stage 2; 2.9 to 5.0 = stage 3; above 5.0 = stage 4. Valid only when stable and hydrated." },
+    "dogSdmaStageUpperBounds": { "value": [18, 35, 54], "source": "IRIS 2023 guidelines, not verified against the official page", "note": "µg/dL. Below 18 = stage 1; 18 to 35 = stage 2; 36 to 54 = stage 3; above 54 = stage 4." }
+  },
+  "workflow": {
+    "firstSessionMaxQuestions": { "value": 5, "source": "Rikki's handoff", "note": "Blocking questions per round. The rest go to DECISIONS.md under Open." },
+    "feelFirstPassPieces": { "value": 5, "source": "Rikki's handoff", "note": "Artistic interpretations in the first Feel tab pass." }
+  }
+}

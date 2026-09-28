@@ -14,7 +14,7 @@
    That is what makes a corrected phone number reach the phone without
    depending on the service-worker lifecycle firing correctly. */
 
-const VERSION = '2026-09-28.1';          // bump on EVERY deploy
+const VERSION = '2026-09-28.2';          // bump on EVERY deploy
 const CACHE   = `luke-crisis-${VERSION}`;
 
 const SHELL = [
@@ -23,6 +23,10 @@ const SHELL = [
   './app.css',
   './app.js',
   './contacts.json',
+  './regimen.json',
+  './config.defaults.json',
+  './store.js',
+  './views.js',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-192.png',
@@ -30,7 +34,10 @@ const SHELL = [
 ];
 
 const INDEX_URL = new URL('./index.html', self.location).href;
-const DATA_URL  = new URL('./contacts.json', self.location).href;
+const DATA_URLS = new Set([
+  new URL('./contacts.json', self.location).href,
+  new URL('./regimen.json', self.location).href,
+]);
 const DATA_TIMEOUT_MS = 2000;
 
 /* ---------- install: fill the new cache, touch nothing old ---------- */
@@ -103,7 +110,7 @@ self.addEventListener('fetch', (event) => {
 
   // respondWith must be called synchronously — never after an await.
   if (request.mode === 'navigate') { event.respondWith(handleNavigate()); return; }
-  if (url.href === DATA_URL)       { event.respondWith(handleData(event)); return; }
+  if (DATA_URLS.has(url.href))     { event.respondWith(handleData(event, url.href)); return; }
   event.respondWith(handleShell(request));
 });
 
@@ -150,21 +157,21 @@ async function handleShell(request) {
    This is the path a corrected phone number travels. The 2-second abort means
    a dead or captive network costs nothing, because the static card is already
    on screen. */
-async function handleData(event) {
+async function handleData(event, dataUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DATA_TIMEOUT_MS);
   try {
-    const response = await fetch(DATA_URL, { cache: 'reload', signal: controller.signal });
+    const response = await fetch(dataUrl, { cache: 'reload', signal: controller.signal });
     clearTimeout(timer);
     if (!response.ok) throw new Error(String(response.status));
 
     // waitUntil, or the worker may be killed before the write lands.
     const copy = response.clone();
-    event.waitUntil(caches.open(CACHE).then((cache) => cache.put(DATA_URL, copy)));
+    event.waitUntil(caches.open(CACHE).then((cache) => cache.put(dataUrl, copy)));
     return response;
   } catch {
     clearTimeout(timer);
-    const cached = await caches.match(DATA_URL, { cacheName: CACHE });
+    const cached = await caches.match(dataUrl, { cacheName: CACHE });
     if (cached) return cached;
     // The page keeps the numbers already rendered in its markup.
     return new Response('{}', {
