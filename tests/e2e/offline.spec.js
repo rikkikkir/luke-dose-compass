@@ -131,3 +131,51 @@ test('a wake round logs in one tap and one confirm', async ({ page }) => {
   // Furosemide is the drug set for the wake round in the seed.
   await expect(page.locator('.entry')).toContainText('Furosemide given');
 });
+
+test('naming a drug sticks, and the app stops calling it a placeholder', async ({ page }) => {
+  await page.goto('/index.html#drugs');
+  await page.fill('[data-drug="opioid"][data-field="name"]', 'Tramadol');
+  await page.fill('[data-drug="opioid"][data-field="strengthMg"]', '50');
+  await page.click('#drugs-save');
+  await expect(page.locator('#drugs-msg')).toContainText('Saved');
+
+  await page.reload();
+  await page.goto('/index.html#drugs');
+  await expect(page.locator('[data-drug="opioid"][data-field="name"]')).toHaveValue('Tramadol');
+
+  // A dose logged now should carry the real strength through to Now.
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="opioid"]').click();
+  await page.goto('/index.html#now');
+  await expect(page.locator('#now')).toContainText('Tramadol');
+  await expect(page.locator('#now')).toContainText('100 mg');
+});
+
+test('an empty box means unknown, not zero', async ({ page }) => {
+  // The whole point of "reality, not fiction": clearing a number must leave
+  // the app saying it does not know, never treating the gap as a limit of 0.
+  await page.goto('/index.html#drugs');
+  await page.fill('[data-drug="furosemide"][data-field="maxPer24hMg"]', '');
+  await page.click('#drugs-save');
+  await expect(page.locator('#drugs-msg')).toContainText('Saved');
+
+  await page.goto('/index.html#log');
+  for (let i = 0; i < 4; i++) await page.locator('[data-give="furosemide"]').click();
+  // No ceiling is known any more, so there is nothing to warn about.
+  await expect(page.locator('#toast')).not.toContainText('the label says');
+  await expect(page.locator('.entry')).toHaveCount(4);
+});
+
+test('the seven-day text names what is still unknown', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
+  const text = await page.evaluate(async () => {
+    const st = await import('./store.js');
+    const seed = await (await fetch('./regimen.json')).json();
+    return st.asText(st.readEvents(), st.mergeRegimen(seed, st.readLocalRegimen()), { days: 7 });
+  });
+  expect(text).toContain('no minimum gap has been set by a vet');
+  expect(text).toContain('still a placeholder');
+  expect(text).toContain('Furosemide');
+  expect(text).toContain('does not block doses');
+});

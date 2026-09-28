@@ -338,3 +338,90 @@ export function daysSinceBackup(now = Date.now()) {
   if (!raw) return null;
   return (now - Number(raw)) / (24 * HOUR);
 }
+
+/* ------------------------------------------------------------ the regimen */
+
+/* regimen.json ships the seed. Rikki's own edits live on her device and win.
+   A drug she has corrected keeps her values; a drug she has not touched keeps
+   the seed, so a corrected seed still reaches her. Doses already logged are
+   untouched either way, because their limits were copied onto them. */
+
+export function readLocalRegimen() {
+  try {
+    const raw = backing().getItem(REGIMEN_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && Array.isArray(parsed.drugs) ? parsed : null;
+  } catch { return null; }
+}
+
+export function writeLocalRegimen(drugs, now = Date.now()) {
+  const payload = { schema: 1, editedAt: now, drugs };
+  const json = JSON.stringify(payload);
+  backing().setItem(REGIMEN_KEY, json);
+  if (backing().getItem(REGIMEN_KEY) !== json) throw new Error('the change was not saved');
+  return payload;
+}
+
+export function mergeRegimen(seed, local) {
+  if (!local) return seed;
+  const byKey = new Map((seed.drugs || []).map((d) => [d.key, d]));
+  for (const mine of local.drugs) {
+    const base = byKey.get(mine.key) || {};
+    // 'source' becomes 'Rikki' the moment she touches a drug, so the screen can
+    // stop calling a value a placeholder once a real one replaces it.
+    byKey.set(mine.key, { ...base, ...mine });
+  }
+  return { ...seed, drugs: [...byKey.values()] };
+}
+
+/* ------------------------------------------------------------- plain text */
+
+/* For pasting into her Claude chat project. Plain text beats a spreadsheet
+   here: the point is a conversation about what happened, and half the drugs
+   still have no name, which the header says out loud so the reader is not
+   left guessing. */
+export function asText(events, regimen, { days = 7, now = Date.now() } = {}) {
+  const from = now - days * 24 * HOUR;
+  const live = inOrder(liveEvents(events)).filter((e) => e.atUTC >= from && e.atUTC <= now);
+  const drugOf = (k) => (regimen.drugs || []).find((d) => d.key === k);
+
+  const lines = [];
+  lines.push(`Luke — dose log, the last ${days} days`);
+  lines.push(`Copied ${new Date(now).toDateString()}`);
+  lines.push('');
+  lines.push('WHAT IS KNOWN ABOUT EACH DRUG');
+  for (const d of regimen.drugs || []) {
+    const known = d.strengthMg ? `${d.strengthMg} mg tablets` : 'strength unknown';
+    const per = d.tabletsPerDose ? `, ${d.tabletsPerDose} per dose` : '';
+    const cap = d.maxPer24hMg ? `, label max ${d.maxPer24hMg} mg/day`
+      : d.maxPer24hDoses ? `, label max ${d.maxPer24hDoses} doses/day` : '';
+    const gap = d.minGapHours ? `, minimum gap ${d.minGapHours} h` : ', no minimum gap has been set by a vet';
+    lines.push(`- ${d.name}: ${known}${per}${cap}${gap} (source: ${d.source || 'unknown'})`);
+    if (d.placeholder) lines.push(`    still a placeholder — no real name or strength${d.vq ? ` (${d.vq})` : ''}`);
+  }
+  lines.push('');
+  lines.push('WHAT HAPPENED');
+  if (!live.length) lines.push('(nothing logged in this period)');
+
+  let day = '';
+  for (const e of live) {
+    const local = new Date(e.atUTC + e.atOffset * 60000);
+    const thisDay = local.toISOString().slice(0, 10);
+    if (thisDay !== day) { day = thisDay; lines.push(''); lines.push(local.toUTCString().slice(0, 16)); }
+    const hh = String(local.getUTCHours()).padStart(2, '0');
+    const mm = String(local.getUTCMinutes()).padStart(2, '0');
+    if (e.type === 'wake') { lines.push(`  ${hh}:${mm}  — we woke —`); continue; }
+    if (e.type === 'sleep') { lines.push(`  ${hh}:${mm}  — sleep started —`); continue; }
+    const d = drugOf(e.drugKey);
+    const mg = d && d.strengthMg ? ` (${e.tablets * d.strengthMg} mg)` : '';
+    const flag = e.pastMax ? '   [past the label]' : '';
+    lines.push(`  ${hh}:${mm}  ${d ? d.name : e.drugKey}  ${e.tablets} tablet${e.tablets === 1 ? '' : 's'}${mg}${flag}`);
+  }
+
+  lines.push('');
+  lines.push('NOTES');
+  lines.push('- Times are when the dose was given, not when it was typed in.');
+  lines.push('- An undone dose is not listed; the original record is kept but does not count.');
+  lines.push('- This app does not block doses and does not recommend them.');
+  return lines.join('\n');
+}
