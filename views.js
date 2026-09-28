@@ -8,10 +8,12 @@ import {
   readEvents, liveEvents, inOrder, lastDose, dosesInWindow, tabletsInWindow,
   lastWake, logDose, logMark, undo, checkAgainstMax, furosemideWindow,
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
+  readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
 } from './store.js';
 import { hasKey, saveKey, forgetKey, testKey, sync, describeState } from './sync.js';
 
 let regimen = null;
+let seedRegimen = null;
 let backdateMinutes = 0;             // applies to the next dose logged
 const justLogged = new Map();        // drugKey -> ms, for the double-tap mirror
 const DOUBLE_TAP_MS = 12000;
@@ -164,6 +166,7 @@ export function renderLog(root, now = Date.now()) {
     <div class="marks">
       <button class="btn" type="button" data-mark="wake">We woke</button>
       <button class="btn" type="button" data-mark="sleep">Sleep started</button>
+      <a class="btn" href="#drugs">His medicines</a>
     </div>
 
     <button class="bigbtn round" type="button" data-round="wake">
@@ -187,6 +190,101 @@ export function renderLog(root, now = Date.now()) {
       </div>`).join('') : '<p class="unknown">Nothing logged yet. Tap Give on any drug above.</p>'}</div>`;
 }
 
+/* One card per drug, editable in place. Adding or correcting a drug has to
+   take under a minute at any hour, with no session open (CLAUDE.md). */
+function drugEditor(d) {
+  const f = (name, label, value, attrs = '') =>
+    `<label class="field"><span>${label}</span>
+      <input data-drug="${d.key}" data-field="${name}" value="${value == null ? '' : esc(value)}" ${attrs}></label>`;
+  const round = (r, label) => `<label class="inline">
+      <input type="checkbox" data-drug="${d.key}" data-round-field="${r}" ${(d.rounds || []).includes(r) ? 'checked' : ''}>
+      ${label}</label>`;
+
+  return `<div class="card drug-edit">
+    <div class="drug-head"><span class="dot" style="background:var(${d.colour || '--supp'})"></span>
+      <span class="drug-name">${esc(d.name)}</span>
+      ${d.placeholder ? '<span class="tag">needs real numbers</span>' : ''}</div>
+    ${f('name', 'Name on the bottle', d.name)}
+    ${f('strengthMg', 'Strength, mg per tablet', d.strengthMg, 'inputmode="decimal" placeholder="unknown"')}
+    ${f('tabletsPerDose', 'Tablets per dose', d.tabletsPerDose, 'inputmode="decimal" placeholder="unknown"')}
+    <div class="rounds">${round('wake', 'Wake round')} ${round('sleep', 'Sleep-prep round')}</div>
+    ${f('maxPer24hMg', 'Most in a day, mg', d.maxPer24hMg, 'inputmode="decimal" placeholder="none set"')}
+    ${f('minGapHours', 'Least time between doses, hours', d.minGapHours, 'inputmode="decimal" placeholder="no vet has set one"')}
+    <p class="sync-msg">${d.unknowns && d.unknowns.length ? 'Still unknown: ' + esc(d.unknowns.join('; ')) : ''}</p>
+  </div>`;
+}
+
+export function renderDrugs(root) {
+  if (!regimen) { root.innerHTML = '<p class="unknown">Loading\u2026</p>'; return; }
+  root.innerHTML = `<a class="back" href="#home">&larr; Luke</a>
+    <h2>His medicines</h2>
+    <p class="vsub">Change anything here whenever you have the bottle in hand. Doses already logged keep the numbers that applied when you logged them.</p>
+    ${regimen.drugs.map(drugEditor).join('')}
+    <div class="sheet-actions">
+      <button class="btn primary" type="button" id="drugs-save">Save changes</button>
+    </div>
+    <p class="sync-msg" id="drugs-msg"></p>
+    <p class="foot-note">Leaving a box empty means "nobody has told me." The app would rather say unknown than invent a number.</p>`;
+}
+
+function saveDrugs() {
+  const edited = regimen.drugs.map((d) => {
+    const next = { ...d };
+    for (const input of document.querySelectorAll(`[data-drug="${d.key}"][data-field]`)) {
+      const field = input.dataset.field;
+      const raw = input.value.trim();
+      if (field === 'name') { next.name = raw || d.name; continue; }
+      next[field] = raw === '' ? null : Number(raw);
+      if (Number.isNaN(next[field])) next[field] = null;
+    }
+    next.rounds = ['wake', 'sleep'].filter((r) =>
+      document.querySelector(`[data-drug="${d.key}"][data-round-field="${r}"]`)?.checked);
+    // Once she has given a drug real numbers it stops being a placeholder.
+    if (next.strengthMg != null && next.name !== d.name) { next.placeholder = false; next.source = 'Rikki'; }
+    else if (next.strengthMg != null && d.placeholder) { next.placeholder = false; next.source = 'Rikki'; }
+    if (next.maxPer24hMg != null && next.strengthMg != null) next.maxPer24hTablets = null;
+    return next;
+  });
+
+  // Set the message AFTER the re-render, or the render wipes it. Same trap
+  // the toast fell into: anything written into HTML we are about to rebuild
+  // has to be written afterwards.
+  let message;
+  try {
+    writeLocalRegimen(edited);
+    regimen = mergeRegimen(seedRegimen, readLocalRegimen());
+    message = 'Saved. Doses already logged keep the numbers that applied then.';
+  } catch (err) {
+    message = `NOT SAVED \u2014 ${err.message}`;
+  }
+  refresh();
+  const msg = document.getElementById('drugs-msg');
+  if (msg) msg.textContent = message;
+  // No sync here: the regimen is this device's own, only events are shared.
+  // runSync() would re-render asynchronously and wipe the message above.
+}
+
+async function copySevenDays() {
+  const msg = document.getElementById('sync-msg');
+  const text = asText(readEvents(), regimen, { days: 7 });
+  try {
+    await navigator.clipboard.writeText(text);
+    say('Seven days copied. Paste it into your Claude chat.');
+  } catch {
+    // Clipboard refused, which iOS does outside a direct tap. Show it instead.
+    const box = document.getElementById('log-body');
+    if (box) {
+      const pre = document.createElement('pre');
+      pre.className = 'textout';
+      pre.textContent = text;
+      box.appendChild(pre);
+      pre.scrollIntoView({ block: 'start' });
+    }
+    say('Could not reach the clipboard. The text is below \u2014 select and copy it.');
+  }
+  if (msg) msg.textContent = '';
+}
+
 function syncCard() {
   if (!hasKey()) {
     return `<div class="card sync setup">
@@ -198,7 +296,8 @@ function syncCard() {
         <button class="btn primary" type="button" id="sync-save">Connect</button>
       </div>
       <p class="sync-msg" id="sync-msg"></p>
-    </div>`;
+    </div>
+    <div class="sheet-actions"><button class="btn" type="button" id="copy7">Copy the last 7 days</button></div>`;
   }
   const s = describeState();
   return `<div class="card sync">
@@ -207,6 +306,7 @@ function syncCard() {
     ${s.damaged ? `<p class="sync-msg">${s.damaged} damaged line${s.damaged === 1 ? '' : 's'} in the shared file were skipped.</p>` : ''}
     <div class="sheet-actions">
       <button class="btn" type="button" id="sync-now">Check now</button>
+      <button class="btn" type="button" id="copy7">Copy the last 7 days</button>
       <button class="btn" type="button" id="sync-forget">Disconnect this device</button>
     </div>
     <p class="sync-msg" id="sync-msg"></p>
@@ -309,8 +409,10 @@ export function refresh(now = Date.now()) {
   try {
     const nowEl = document.getElementById('now-body');
     const logEl = document.getElementById('log-body');
+    const drugsEl = document.getElementById('drugs-body');
     if (nowEl) renderNow(nowEl, now);
     if (logEl) renderLog(logEl, now);
+    if (drugsEl) renderDrugs(drugsEl);
     banner();
   } catch (err) {
     console.warn('render failed', err);   // the crisis card is untouched
@@ -331,35 +433,49 @@ function banner() {
   const el = document.getElementById('storagebanner');
   if (!el) return;
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const shared = hasKey();
+
+  // Order matters: say the worst true thing first.
   if (!storageIsDurable()) {
     el.textContent = 'This browser is not saving anything. Doses logged here will be lost.';
     el.hidden = false;
-  } else if (iOS && !isStandalone()) {
-    el.innerHTML = 'You are in Safari. Doses logged here can disappear after 7 days and will not show in the Home Screen app. Open <b>Luke</b> from your Home Screen instead.';
-    el.hidden = false;
-  } else if (!iOS && !isStandalone()) {
-    el.textContent = 'This is not the logging device. Doses belong on the phone; this copy will not see them.';
-    el.hidden = false;
-  } else {
-    el.hidden = true;
+    return;
   }
+  if (iOS && !isStandalone()) {
+    // The seven-day wipe applies to a Safari tab and not to a Home Screen app.
+    el.innerHTML = shared
+      ? 'You are in Safari. Add <b>Luke</b> to your Home Screen \u2014 a tab forgets its doses after 7 days, and they are only safe once they have reached the shared log.'
+      : 'You are in Safari. Doses logged here can disappear after 7 days. Open <b>Luke</b> from your Home Screen instead.';
+    el.hidden = false;
+    return;
+  }
+  if (!shared) {
+    el.textContent = 'Doses logged here stay on this device. Set up the shared log to join this and your phone together.';
+    el.hidden = false;
+    return;
+  }
+  el.hidden = true;   // sharing, and storage is durable: nothing to warn about
 }
 
 export async function start() {
   try {
     const res = await fetch(new URL('regimen.json', document.baseURI), { cache: 'no-store' });
-    regimen = await res.json();
+    seedRegimen = await res.json();
   } catch {
-    regimen = { drugs: [], effects: {} };
+    seedRegimen = { drugs: [], effects: {} };
   }
+  // Her own corrections win over the shipped seed, drug by drug.
+  regimen = mergeRegimen(seedRegimen, readLocalRegimen());
   try { navigator.storage?.persist?.(); } catch { /* usually false on iOS; harmless */ }
 
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('[data-give],[data-back],[data-mark],[data-round],[data-undo],#sheet-ok,#sheet-no,#sync-save,#sync-now,#sync-forget');
+    const t = ev.target.closest('[data-give],[data-back],[data-mark],[data-round],[data-undo],#sheet-ok,#sheet-no,#sync-save,#sync-now,#sync-forget,#copy7,#drugs-save');
     if (!t) return;
     const now = Date.now();
 
     if (t.id === 'sync-save')   { connectSync(); return; }
+    if (t.id === 'copy7')       { copySevenDays(); return; }
+    if (t.id === 'drugs-save')  { saveDrugs(); return; }
     if (t.id === 'sync-now')    { runSync(true); return; }
     if (t.id === 'sync-forget') { forgetKey(); refresh(now); say('This device is no longer sharing its log.'); return; }
     if (t.dataset.give) { give(t.dataset.give, now); return; }
