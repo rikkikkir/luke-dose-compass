@@ -1,0 +1,14 @@
+screenshots/
+*.export.*
+node_modules/
+.DS_Store
+test-results/
+playwright-report/
+_tmp-*
+
+# The working brief stays on the Mac (S6: "Code-only repo").
+# docs/ holds Luke's medications, his lab values, his vets, and notes about
+# where his information is already exposed elsewhere. This repository is
+# public, and published history does not un-publish.
+# Claude Code reads these files locally either way.
+docs/
