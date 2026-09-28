@@ -359,3 +359,11 @@ a:focus-visible, button:focus-visible, summary:focus-visible {
 @media (min-width: 652px) { .storagebanner { margin-inline: auto; } }
 @media (max-width: 651px) { .storagebanner { margin-inline: 16px; } }
 .storagebanner[hidden] { display: none; }
+
+/* ---- shared log ---------------------------------------------------------- */
+.card.sync { margin-top: 18px; }
+.sync-lead { font-size: 13px; color: var(--ink3); margin: 8px 0 10px; }
+.sync-status { margin: 6px 0 0; font-size: 15px; }
+.sync-msg { margin: 10px 0 0; font-size: 13px; color: var(--ink2); min-height: 1.2em; }
+#synckey { width: 100%; font: 400 14px var(--mono); padding: 10px 12px; border-radius: 8px;
+           border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
