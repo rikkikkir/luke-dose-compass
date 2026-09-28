@@ -81,8 +81,53 @@ test('the card renders with JavaScript disabled', async ({ browser }) => {
 
 test('the home screen offers one tap to the crisis card', async ({ page }) => {
   await page.goto('/index.html');
-  await expect(page.locator('.bigbtn')).toBeVisible();
-  await page.locator('.bigbtn').click();
+  const card = page.locator('a.bigbtn[href="#crisis"]');
+  await expect(card).toBeVisible();
+  await card.click();
   await expect(page.locator('#crisis')).toBeVisible();
   await expect(page.locator('#home')).toBeHidden();
+});
+
+test('a dose is logged, shows up on Now, and survives a reload', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
+
+  // The toast confirms only after the write was read back (never optimistic).
+  await expect(page.locator('#toast')).toContainText('Furosemide logged');
+  await expect(page.locator('.entry')).toContainText('Furosemide given');
+
+  await page.goto('/index.html#now');
+  await expect(page.locator('#now')).toContainText('Last given');
+  await expect(page.locator('#now')).toContainText('Likely');   // the sourced window
+
+  await page.reload();
+  await page.goto('/index.html#now');
+  await expect(page.locator('#now')).toContainText('Last given');
+});
+
+test('a dose past the label is reported and still logged', async ({ page }) => {
+  await page.goto('/index.html#log');
+  // 320 mg a day is 4 tablets. A fifth and sixth pass the label.
+  for (let i = 0; i < 3; i++) await page.locator('[data-give="furosemide"]').click();
+  await expect(page.locator('#toast')).toContainText('the label says 320');
+  // Reported, not refused: the entries are all there.
+  await expect(page.locator('.entry')).toHaveCount(3);
+});
+
+test('undo removes a dose from the count but keeps the record', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="opioid"]').click();
+  await expect(page.locator('.entry')).toHaveCount(1);
+
+  await page.locator('.entry .x').first().click();
+  await expect(page.locator('#toast')).toContainText('kept in the record');
+  await expect(page.locator('.entry')).toHaveCount(0);
+});
+
+test('a wake round logs in one tap and one confirm', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-round="wake"]').click();          // tap
+  await page.locator('#sheet-ok').click();                    // confirm
+  // Furosemide is the drug set for the wake round in the seed.
+  await expect(page.locator('.entry')).toContainText('Furosemide given');
 });

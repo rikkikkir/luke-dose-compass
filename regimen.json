@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "seededFrom": "docs/LUKE-SNAPSHOT-2026-09-14.md",
+  "seededOn": "2026-09-28",
+  "note": "The seed only. Rikki's own edits live on her device and win over this file. Every number here carries where it came from. A drug with unknown values is logged, never estimated.",
+  "drugs": [
+    {
+      "key": "furosemide",
+      "name": "Furosemide",
+      "alsoCalled": "Lasix",
+      "colour": "--lasix",
+      "strengthMg": 80,
+      "tabletsPerDose": 2,
+      "rounds": ["wake", "sleep"],
+      "maxPerDoseTablets": 2,
+      "maxPer24hMg": 320,
+      "minGapHours": null,
+      "withFood": null,
+      "source": "compendium",
+      "modelled": true,
+      "unknowns": ["minimum gap", "with or without food", "reason prescribed (VQ-5)"]
+    },
+    {
+      "key": "amantadine",
+      "name": "Amantadine",
+      "colour": "--supp",
+      "strengthMg": 100,
+      "tabletsPerDose": 1,
+      "rounds": [],
+      "maxPerDoseTablets": 1,
+      "maxPer24hMg": 100,
+      "minGapHours": null,
+      "withFood": null,
+      "source": "compendium",
+      "modelled": "builds",
+      "unknowns": ["which round (VQ-13 may change the dose)"]
+    },
+    {
+      "key": "opioid",
+      "name": "Opioid",
+      "placeholder": true,
+      "colour": "--opi",
+      "strengthMg": null,
+      "tabletsPerDose": 2,
+      "rounds": [],
+      "asNeeded": true,
+      "maxPerDoseTablets": 2,
+      "maxPer24hDoses": 2,
+      "maxPer24hTablets": 4,
+      "minGapHours": null,
+      "withFood": null,
+      "source": "placeholder",
+      "modelled": false,
+      "vq": "VQ-3",
+      "unknowns": ["name", "pill strength", "minimum gap (VQ-3)"]
+    },
+    {
+      "key": "nsaid",
+      "name": "NSAID",
+      "placeholder": true,
+      "colour": "--nsaid",
+      "strengthMg": null,
+      "tabletsPerDose": null,
+      "rounds": [],
+      "minGapHours": null,
+      "source": "placeholder",
+      "modelled": false,
+      "vq": "VQ-1",
+      "unknowns": ["whether any NSAID is active at all (VQ-1)", "name", "dose"]
+    },
+    {
+      "key": "antacid",
+      "name": "Antacid",
+      "placeholder": true,
+      "colour": "--gas",
+      "strengthMg": null,
+      "tabletsPerDose": null,
+      "rounds": [],
+      "minGapHours": null,
+      "source": "placeholder",
+      "modelled": false,
+      "unknowns": ["name", "dose", "which round"]
+    },
+    {
+      "key": "gasx",
+      "name": "Gas-X",
+      "alsoCalled": "simethicone",
+      "colour": "--gas",
+      "strengthMg": null,
+      "tabletsPerDose": null,
+      "rounds": [],
+      "minGapHours": null,
+      "source": "compendium",
+      "modelled": false,
+      "unknowns": ["dose", "which round"]
+    },
+    {
+      "key": "supplements",
+      "name": "Supplements",
+      "placeholder": true,
+      "colour": "--supp",
+      "strengthMg": null,
+      "tabletsPerDose": null,
+      "rounds": [],
+      "minGapHours": null,
+      "source": "placeholder",
+      "modelled": false,
+      "vq": "VQ-14",
+      "unknowns": ["the individual items (VQ-14)"]
+    }
+  ],
+  "effects": {
+    "furosemide": {
+      "onsetMinFrom": 30,
+      "onsetMinTo": 60,
+      "peakHoursFrom": 1,
+      "peakHoursTo": 2,
+      "durationHoursFrom": 4,
+      "durationHoursTo": 6,
+      "variability": "Oral absorption in dogs varies from 10% to 100%, so the effect in any one dog is hard to predict. Treat every time here as a rough window, not a schedule.",
+      "sources": [
+        "Merck Veterinary Manual, Diuretics for Use in Animals",
+        "BMC Veterinary Research (2021), furosemide pharmacokinetics and diuretic effect in healthy beagle dogs: mean diuresis 5.72 h, back to baseline by 6 h"
+      ]
+    }
+  }
+}

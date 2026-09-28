@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="2026-09-28.1">
+<meta name="app-version" content="2026-09-28.2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Luke's crisis card: who to call, and the signs that mean call now. Works with no signal.">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16,6 +16,8 @@
 <link rel="stylesheet" href="./app.css">
 </head>
 <body>
+
+<p id="storagebanner" class="storagebanner" hidden></p>
 
 <!-- Everything below renders with no JavaScript at all. app.js only enhances. -->
 
@@ -33,11 +35,15 @@
         <span class="bigbtn-sub">Who to call, and the signs that mean call now</span>
       </span>
     </a>
+    <nav class="home-nav">
+      <a href="#now">Right now</a>
+      <a href="#log">Log a dose</a>
+    </nav>
     <p class="offline-note"><span class="dot" aria-hidden="true"></span> Works with no signal</p>
   </div>
 </section>
 
-<section id="crisis">
+<section id="crisis" class="view">
   <a class="back" href="#home">&larr; Luke</a>
 
   <h2>Call in this order</h2>
@@ -130,10 +136,32 @@
   </ul>
 </section>
 
+<!-- Everything above this line renders with no JavaScript. The two screens
+     below need it, and are written so that failing cannot reach the card. -->
+
+<section id="now" class="view">
+  <div id="now-body">
+    <a class="back" href="#home">&larr; Luke</a>
+    <h2>Right now</h2>
+    <p class="unknown">This screen needs JavaScript. The crisis card above does not, and still works.</p>
+  </div>
+</section>
+
+<section id="log" class="view">
+  <div id="log-body">
+    <a class="back" href="#home">&larr; Luke</a>
+    <h2>Log</h2>
+    <p class="unknown">This screen needs JavaScript. The crisis card above does not, and still works.</p>
+  </div>
+  <!-- Outside the rendered body on purpose: a live region that is destroyed
+       and recreated on every render does not announce reliably. -->
+  <p class="toast" id="toast" aria-live="polite"></p>
+</section>
+
 </main>
 
 <footer>
-  <p id="version">v2026-09-28.1 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
+  <p id="version">v2026-09-28.2 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
 </footer>
 
 <div id="updatebar" hidden>
@@ -141,7 +169,14 @@
   <button type="button" id="reloadbtn">Reload</button>
 </div>
 
-<script src="./app.js" type="module"></script>
+<script type="module">
+  // Kept separate from the registration script below on purpose: if either
+  // one throws, the other still runs, and the crisis card is untouched by both.
+  import('./app.js').catch((e) => console.warn('app.js', e));
+  import('./views.js')
+    .then((m) => m.start())
+    .catch((e) => console.warn('views.js', e));
+</script>
 
 <!--
   Registration is inline and classic, deliberately.

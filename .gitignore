@@ -12,3 +12,16 @@ _tmp-*
 # public, and published history does not un-publish.
 # Claude Code reads these files locally either way.
 docs/
+
+# The handoff brief. Same reasoning as docs/ above: it describes Luke's
+# situation and Rikki's, and this repository is public. Claude Code reads
+# these locally. config.defaults.json is NOT here: the app reads it and it
+# holds settings only, never Luke's data.
+CLAUDE.md
+ROADMAP.md
+START-HERE.md
+FILE-INDEX.md
+PROMPT-first-session.md
+.claude/
+AGENTS.md
+.agents/
