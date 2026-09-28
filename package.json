@@ -1,0 +1,14 @@
+{
+  "name": "luke-dose-compass",
+  "version": "0.0.0",
+  "description": "Luke's crisis card. Who to call, and the signs that mean call now.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "e2e": "playwright test"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  },
+  "private": true
+}

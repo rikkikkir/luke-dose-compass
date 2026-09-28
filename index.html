@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="app-version" content="2026-09-28.1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Luke's crisis card: who to call, and the signs that mean call now. Works with no signal.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Luke">
+<meta name="theme-color" content="#14191B">
+<title>Luke</title>
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<!-- Everything below renders with no JavaScript at all. app.js only enhances. -->
+
+<main>
+
+<section id="home">
+  <div class="home-inner">
+    <img class="portrait" src="./icon-192.png" alt="Luke" width="96" height="96">
+    <h1>Luke</h1>
+    <p class="subtitle">Dose Compass</p>
+    <a class="bigbtn" href="#crisis">
+      <span class="bigbtn-icon" aria-hidden="true">!</span>
+      <span>
+        <span class="bigbtn-label">Crisis card</span>
+        <span class="bigbtn-sub">Who to call, and the signs that mean call now</span>
+      </span>
+    </a>
+    <p class="offline-note"><span class="dot" aria-hidden="true"></span> Works with no signal</p>
+  </div>
+</section>
+
+<section id="crisis">
+  <a class="back" href="#home">&larr; Luke</a>
+
+  <h2>Call in this order</h2>
+
+  <ul class="calls">
+    <li class="call rank1">
+      <p class="call-name">Bridger Veterinary Specialists &amp; Emergency</p>
+      <p class="call-hours"><span class="tick" aria-hidden="true">&#10003;</span> Open 24 hours, every day</p>
+      <a class="tel" href="tel:+14065484226">(406) 548-4226</a>
+      <p class="call-note">Dr. Culver's hospital, so Luke's history is already here. 1110 Campbell Road.</p>
+    </li>
+
+    <li class="call">
+      <p class="call-name">Foothills Veterinary Hospital</p>
+      <p class="call-hours"><span class="tick" aria-hidden="true">&#10003;</span> Mon to Fri, 8am to 6pm. Closed weekends.</p>
+      <a class="tel" href="tel:+14065560604">(406) 556-0604</a>
+      <p class="call-note">Luke's regular vet. Also offers end-of-life care.</p>
+    </li>
+
+    <li class="call">
+      <p class="call-name">Peaceful Journey</p>
+      <p class="call-hours"><span class="mark" aria-hidden="true">&#183;</span> Hours not confirmed &mdash; from the compendium, not re-checked</p>
+      <a class="tel" href="tel:+14064147240">406-414-7240</a>
+      <p class="call-note">Dr. Jenny Muckey. In-home hospice and quality-of-life consultations. For a comfort question rather than an emergency.</p>
+    </li>
+  </ul>
+
+  <details class="unconfirmed">
+    <summary>Unconfirmed &mdash; call and check first</summary>
+    <p class="unconfirmed-lead">These two are not on the list above because nobody could confirm they are open when you would need them.</p>
+
+    <div class="call muted">
+      <p class="call-name">Bozeman Pet Hospital</p>
+      <p class="call-hours">Reported Sat and Sun, 9am to 9pm</p>
+      <a class="tel" href="tel:+14065872946">(406) 587-2946</a>
+      <p class="call-note">Foothills' sister hospital, and Foothills says they can see Luke's records. The hours come from Foothills' website, not from this hospital's own site.</p>
+    </div>
+
+    <div class="call muted">
+      <p class="call-name">Pet Emergency Trauma Services (PETS)</p>
+      <p class="call-hours">Hours unknown. No source says 24 hours.</p>
+      <a class="tel" href="tel:+14065873996">(406) 587-3996</a>
+      <p class="call-note">Foothills still refers overnight emergencies here, but this hospital's own web address now forwards to Gallatin Veterinary Hospital, and reported hours conflict across every source. Call and ask before a bad night, not during one.</p>
+    </div>
+  </details>
+
+  <h2>Urgent signs, even in comfort care</h2>
+  <p class="draft"><span aria-hidden="true">&#9888;</span> Draft, not yet vet-reviewed</p>
+  <p class="lead">Call the vet, an emergency vet, or the hospice vet for any of these:</p>
+
+  <ul class="signs">
+    <li>
+      <p class="sign-title">Bloat (GDV, gastric dilatation-volvulus)</p>
+      <ul>
+        <li>retching without bringing anything up</li>
+        <li>a swollen or tight belly</li>
+        <li>drooling</li>
+        <li>restlessness</li>
+        <li>pale gums</li>
+      </ul>
+      <p class="sign-note">Weimaraners are a high-risk breed. Bloat usually needs surgery, so decide the plan in advance with the vet (VQ-9).</p>
+    </li>
+    <li>
+      <p class="sign-title">Breathing</p>
+      <ul><li>labored breathing, or a resting rate staying above the normal range</li></ul>
+    </li>
+    <li>
+      <p class="sign-title">Pain</p>
+      <ul><li>pain that medications no longer control</li></ul>
+    </li>
+    <li><p class="sign-title">Collapse or seizures</p></li>
+    <li>
+      <p class="sign-title">Urine</p>
+      <ul><li>no urine for many hours while on a diuretic</li></ul>
+    </li>
+    <li>
+      <p class="sign-title">Vomiting or stool</p>
+      <ul><li>repeated vomiting, or black, tarry stool</li></ul>
+    </li>
+    <li>
+      <p class="sign-title">Gums</p>
+      <ul><li>very pale, gray, or blue</li></ul>
+    </li>
+  </ul>
+
+  <p class="lead">On breathing specifically:</p>
+  <ul class="signs plain">
+    <li>A rate consistently above the normal range: call the vet soon.</li>
+    <li>Labored breathing, a blue or gray tongue, or collapse: urgent.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <p id="version">v2026-09-28.1 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
+</footer>
+
+<div id="updatebar" hidden>
+  <span>A newer version is ready.</span>
+  <button type="button" id="reloadbtn">Reload</button>
+</div>
+
+<script src="./app.js" type="module"></script>
+
+<!--
+  Registration is inline and classic, deliberately.
+  A parse error in app.js must not be able to stop the app becoming offline-capable,
+  and a bug here must not be able to stop the card above from rendering.
+-->
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+
+  // document.baseURI is https://rikkikkir.github.io/luke-dose-compass/
+  // so this resolves to .../luke-dose-compass/sw.js with scope /luke-dose-compass/.
+  // NEVER write '/sw.js' here: on a project page a leading slash means
+  // rikkikkir.github.io/sw.js, which 404s. That failure is invisible online
+  // and total offline.
+  var swUrl = new URL('sw.js', document.baseURI);
+  var scope = new URL('./', document.baseURI).pathname;
+
+  var hadController = !!navigator.serviceWorker.controller;
+  var startedAt = Date.now();
+  var lastReload = Number(sessionStorage.getItem('sw-reload-at') || 0);
+
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) return;                  // first ever install: nothing to replace
+    if (Date.now() - lastReload < 30000) return; // loop guard
+
+    var settled = Date.now() - startedAt > 4000;
+    if (settled && document.visibilityState === 'visible') {
+      var bar = document.getElementById('updatebar');
+      if (bar) bar.hidden = false;               // she may be reading a number; offer, don't yank
+      return;
+    }
+    sessionStorage.setItem('sw-reload-at', String(Date.now()));
+    location.reload();
+  });
+
+  navigator.serviceWorker.register(swUrl, {
+    scope: scope,
+    // GitHub Pages sends Cache-Control: max-age=600. Without this the phone can
+    // be handed a ten-minute-old sw.js, which is how a version gets pinned.
+    updateViaCache: 'none'
+  }).then(function (reg) {
+    reg.update();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') reg.update();
+    });
+  }).catch(function (err) {
+    console.warn('service worker registration failed', err);
+    // The card is already on screen. Nothing to undo.
+  });
+
+  var btn = document.getElementById('reloadbtn');
+  if (btn) btn.addEventListener('click', function () {
+    sessionStorage.setItem('sw-reload-at', String(Date.now()));
+    location.reload();
+  });
+})();
+</script>
+
+</body>
+</html>

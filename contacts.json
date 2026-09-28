@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "verifiedOn": "2026-09-28",
+  "note": "Generated from docs/CONTACTS.md, which is the one home for every phone number (CLAUDE.md). Change a number there first, then regenerate here.",
+  "primary": [
+    {
+      "id": "bridger",
+      "name": "Bridger Veterinary Specialists & Emergency",
+      "phone": "(406) 548-4226",
+      "tel": "+14065484226",
+      "hours": "Open 24 hours, every day",
+      "note": "Dr. Culver's hospital, so Luke's history is already here. 1110 Campbell Road.",
+      "verified": "clinic website, 28 Sep 2026",
+      "rank": 1
+    },
+    {
+      "id": "foothills",
+      "name": "Foothills Veterinary Hospital",
+      "phone": "(406) 556-0604",
+      "tel": "+14065560604",
+      "hours": "Mon to Fri, 8am to 6pm. Closed weekends.",
+      "note": "Luke's regular vet. Also offers end-of-life care.",
+      "verified": "clinic website, 28 Sep 2026",
+      "rank": 2
+    },
+    {
+      "id": "peaceful-journey",
+      "name": "Peaceful Journey",
+      "phone": "406-414-7240",
+      "tel": "+14064147240",
+      "hours": "Hours not confirmed",
+      "note": "Dr. Jenny Muckey. In-home hospice and quality-of-life consultations. For a comfort question rather than an emergency.",
+      "verified": "from the compendium, not re-checked",
+      "rank": 3
+    }
+  ],
+  "unconfirmed": [
+    {
+      "id": "bozeman-pet",
+      "name": "Bozeman Pet Hospital",
+      "phone": "(406) 587-2946",
+      "tel": "+14065872946",
+      "hours": "Reported Sat and Sun, 9am to 9pm",
+      "why": "Foothills' sister hospital, and Foothills says they can see Luke's records. The hours come from Foothills' website, not from this hospital's own site."
+    },
+    {
+      "id": "pets",
+      "name": "Pet Emergency Trauma Services (PETS)",
+      "phone": "(406) 587-3996",
+      "tel": "+14065873996",
+      "hours": "Unknown. No source says 24 hours.",
+      "why": "Foothills still refers overnight emergencies here, but this hospital's own web address now forwards to Gallatin Veterinary Hospital, and reported hours conflict across every source. Call and ask before a bad night, not during one."
+    }
+  ],
+  "urgentSigns": {
+    "heading": "Urgent signs, even in comfort care",
+    "lead": "Call the vet, an emergency vet, or the hospice vet for any of these:",
+    "items": [
+      {
+        "title": "Bloat (GDV, gastric dilatation-volvulus)",
+        "signs": [
+          "retching without bringing anything up",
+          "a swollen or tight belly",
+          "drooling",
+          "restlessness",
+          "pale gums"
+        ],
+        "note": "Weimaraners are a high-risk breed. Bloat usually needs surgery, so decide the plan in advance with the vet (VQ-9)."
+      },
+      { "title": "Breathing", "signs": ["labored breathing, or a resting rate staying above the normal range"] },
+      { "title": "Pain", "signs": ["pain that medications no longer control"] },
+      { "title": "Collapse or seizures", "signs": [] },
+      { "title": "Urine", "signs": ["no urine for many hours while on a diuretic"] },
+      { "title": "Vomiting or stool", "signs": ["repeated vomiting, or black, tarry stool"] },
+      { "title": "Gums", "signs": ["very pale, gray, or blue"] }
+    ],
+    "breathing": [
+      "A rate consistently above the normal range: call the vet soon.",
+      "Labored breathing, a blue or gray tongue, or collapse: urgent."
+    ]
+  }
+}

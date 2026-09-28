@@ -1,0 +1,263 @@
+/* Luke's Dose Compass — milestone 0.
+   Colour tokens are copied verbatim from docs/reference/prototype-v2.html.
+   Type is the system stack, not the prototype's three webfont families:
+   this screen has to render in airplane mode, and iOS draws SF beautifully. */
+
+:root {
+  --bg: #EEF0F0;
+  --surface: #FFFFFF;
+  --sunk: #E3E7E8;
+  --ink: #1C2326;
+  --ink2: #4C585D;
+  --ink3: #77848A;
+  --line: #CDD4D6;
+  --accent: #2F5D73;
+  --onaccent: #FFFFFF;
+  --ok: #2E8A57;
+  --warn: #B87A0A;
+  --bad: #C2413A;
+
+  --body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14191B;
+    --surface: #1C2326;
+    --sunk: #262F33;
+    --ink: #E6ECEE;
+    --ink2: #A9B5BA;
+    --ink3: #809096;
+    --line: #35423F;
+    --accent: #8CC0D6;
+    --onaccent: #10171A;
+    --ok: #55C07F;
+    --warn: #E3AC3C;
+    --bad: #E56B63;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14191B;
+  --surface: #1C2326;
+  --sunk: #262F33;
+  --ink: #E6ECEE;
+  --ink2: #A9B5BA;
+  --ink3: #809096;
+  --line: #35423F;
+  --accent: #8CC0D6;
+  --onaccent: #10171A;
+  --ok: #55C07F;
+  --warn: #E3AC3C;
+  --bad: #E56B63;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--body);
+  -webkit-text-size-adjust: 100%;
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+main { max-width: 620px; margin: 0 auto; padding: 0 16px; }
+
+h1, h2 { letter-spacing: -0.01em; text-wrap: balance; }
+
+/* ---- view switching, pure CSS, no script ---------------------------------
+   #crisis is hidden until the URL targets it. Where :has() is unavailable the
+   page simply becomes one long scroll — both sections visible, nothing lost. */
+
+#crisis { display: none; }
+#crisis:target { display: block; }
+
+@supports selector(:has(*)) {
+  body:has(#crisis:target) #home { display: none; }
+}
+
+/* ---- home ---------------------------------------------------------------- */
+
+#home .home-inner {
+  min-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  padding: 32px 0;
+}
+
+.portrait {
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+#home h1 { font-size: 34px; margin: 14px 0 0; }
+.subtitle { margin: 0; color: var(--ink3); font-size: 15px; }
+
+.bigbtn {
+  margin-top: 30px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--bad);
+  border-radius: 16px;
+  padding: 16px 18px;
+  color: var(--ink);
+}
+
+.bigbtn-icon {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--bad);
+  color: #fff;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 20px;
+}
+
+.bigbtn-label { display: block; font-weight: 600; font-size: 18px; }
+.bigbtn-sub { display: block; color: var(--ink3); font-size: 13px; margin-top: 2px; }
+
+.offline-note {
+  margin-top: 26px;
+  color: var(--ink3);
+  font-size: 13px;
+  display: flex; align-items: center; gap: 7px;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+
+/* ---- crisis card --------------------------------------------------------- */
+
+.back {
+  display: inline-block;
+  margin: 18px 0 4px;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 15px;
+  padding: 6px 0;
+}
+
+#crisis h2 { font-size: 21px; margin: 26px 0 10px; }
+
+.calls, .signs { list-style: none; padding: 0; margin: 0; }
+
+.call {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.call.rank1 { border-left: 4px solid var(--ok); }
+
+.call-name { margin: 0; font-weight: 600; font-size: 16px; }
+
+.call-hours { margin: 5px 0 0; font-size: 13px; color: var(--ink2); }
+.tick { color: var(--ok); font-weight: 700; }
+.mark { color: var(--ink3); font-weight: 700; }
+
+/* The number is the whole point of this screen: big, tappable, and selectable
+   as text so it still works if the dialer handoff ever fails. */
+.tel {
+  display: inline-block;
+  margin: 10px 0 0;
+  font: 600 26px/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  padding: 6px 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.call-note { margin: 8px 0 0; font-size: 13px; color: var(--ink3); }
+
+.unconfirmed {
+  margin: 4px 0 8px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--sunk);
+}
+.unconfirmed summary { cursor: pointer; font-size: 14px; color: var(--ink2); font-weight: 500; }
+.unconfirmed-lead { font-size: 13px; color: var(--ink3); margin: 10px 0 12px; }
+.call.muted { background: var(--bg); }
+.call.muted .tel { color: var(--ink2); font-size: 22px; }
+
+.draft {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--warn);
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.lead { font-size: 15px; color: var(--ink2); margin: 0 0 12px; }
+
+.signs > li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+}
+.signs.plain > li { background: none; border: none; padding: 4px 0; margin: 0; color: var(--ink2); font-size: 15px; }
+.sign-title { margin: 0; font-weight: 600; }
+.signs ul { margin: 7px 0 0; padding-left: 20px; color: var(--ink2); font-size: 15px; }
+.signs ul li { margin-bottom: 2px; }
+.sign-note { margin: 9px 0 0; font-size: 13px; color: var(--ink3); }
+
+/* ---- footer and update bar ------------------------------------------------ */
+
+footer { max-width: 620px; margin: 0 auto; padding: 26px 16px calc(26px + env(safe-area-inset-bottom, 0px)); }
+footer p { margin: 0; font: 11px/1.5 var(--mono); color: var(--ink3); text-align: center; }
+
+#updatebar {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--accent);
+  color: var(--onaccent);
+  border-radius: 12px;
+  padding: 11px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 14px;
+}
+#updatebar[hidden] { display: none; }
+#updatebar button {
+  font: inherit; font-weight: 600;
+  background: var(--onaccent); color: var(--accent);
+  border: 0; border-radius: 8px; padding: 7px 13px;
+}
+
+a:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
