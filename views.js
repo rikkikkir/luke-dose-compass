@@ -182,6 +182,8 @@ export function renderLog(root, now = Date.now()) {
 
     <div class="rows">${regimen.drugs.map((d) => logRow(d, events, now)).join('')}</div>
 
+    ${syncCard()}
+
     <p class="k">Recent · tap × to undo</p>
     <div class="entries">${recent.length ? recent.map((e) => `<div class="entry">
         <span class="etime">${esc(clockLabel(e.atUTC, e.atOffset))}</span>

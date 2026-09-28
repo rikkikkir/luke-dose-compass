@@ -179,3 +179,23 @@ test('the seven-day text names what is still unknown', async ({ page }) => {
   expect(text).toContain('Furosemide');
   expect(text).toContain('does not block doses');
 });
+
+test('the sync setup is actually reachable', async ({ page }) => {
+  // This test exists because sync once shipped with the card defined and never
+  // rendered. A feature nobody can switch on is a feature that does not exist.
+  await page.goto('/index.html#log');
+  await expect(page.locator('#synckey')).toBeVisible();
+  await expect(page.locator('#sync-save')).toBeVisible();
+  await expect(page.locator('#copy7')).toBeVisible();
+});
+
+test('a key that cannot be verified is not kept', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.fill('#synckey', 'github_pat_obviously_not_a_real_key');
+  await page.click('#sync-save');
+  await expect(page.locator('#sync-msg')).not.toHaveText('', { timeout: 15000 });
+  // Still offering setup, because a key that failed its check is discarded.
+  await page.reload();
+  await page.goto('/index.html#log');
+  await expect(page.locator('#synckey')).toBeVisible();
+});
