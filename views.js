@@ -9,6 +9,7 @@ import {
   lastWake, logDose, logMark, undo, checkAgainstMax, furosemideWindow,
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
 } from './store.js';
+import { hasKey, saveKey, forgetKey, testKey, sync, describeState } from './sync.js';
 
 let regimen = null;
 let backdateMinutes = 0;             // applies to the next dose logged
@@ -186,6 +187,32 @@ export function renderLog(root, now = Date.now()) {
       </div>`).join('') : '<p class="unknown">Nothing logged yet. Tap Give on any drug above.</p>'}</div>`;
 }
 
+function syncCard() {
+  if (!hasKey()) {
+    return `<div class="card sync setup">
+      <span class="k">Share this log with your other device</span>
+      <p class="sync-lead">Paste the key from GitHub. It is stored only on this device, in a place your other web pages cannot read, and you can cancel it from GitHub at any time.</p>
+      <input id="synckey" type="password" inputmode="text" autocomplete="off" spellcheck="false"
+             placeholder="github_pat_\u2026" aria-label="Sync key">
+      <div class="sheet-actions">
+        <button class="btn primary" type="button" id="sync-save">Connect</button>
+      </div>
+      <p class="sync-msg" id="sync-msg"></p>
+    </div>`;
+  }
+  const s = describeState();
+  return `<div class="card sync">
+    <span class="k">Shared log</span>
+    <p class="sync-status"><b>${esc(s.word)}</b> \u00b7 ${esc(s.detail)}</p>
+    ${s.damaged ? `<p class="sync-msg">${s.damaged} damaged line${s.damaged === 1 ? '' : 's'} in the shared file were skipped.</p>` : ''}
+    <div class="sheet-actions">
+      <button class="btn" type="button" id="sync-now">Check now</button>
+      <button class="btn" type="button" id="sync-forget">Disconnect this device</button>
+    </div>
+    <p class="sync-msg" id="sync-msg"></p>
+  </div>`;
+}
+
 function openSheet(round) {
   const sheet = document.getElementById('sheet');
   if (!sheet) return;
@@ -234,6 +261,48 @@ function give(drugKey, now = Date.now()) {
     ? `${drug.name} logged. That puts him at ${describePastMax(drug, passed)}.`
     : `${drug.name} logged${dose.atUTC < now - 60000 ? `, ${elapsed(now - dose.atUTC)}` : ''}.`);
   refresh();
+  runSync();
+}
+
+/* Pasting a key is the one moment to be strict: a key that can read but not
+   write would look fine for days and then quietly lose every dose logged here.
+   So the key is tested against the real repository before it is saved. */
+async function connectSync() {
+  const input = document.getElementById('synckey');
+  const msg = document.getElementById('sync-msg');
+  const token = (input?.value || '').trim();
+  if (!token) { if (msg) msg.textContent = 'Paste the key first.'; return; }
+
+  if (msg) msg.textContent = 'Checking the key\u2026';
+  saveKey(token);
+  try {
+    await testKey();
+    if (msg) msg.textContent = 'Connected. Bringing the two logs together\u2026';
+    await sync();
+    refresh();
+    say('This device is now sharing Luke\u2019s log.');
+  } catch (err) {
+    forgetKey();                       // never keep a key that did not work
+    if (msg) msg.textContent = err.message;
+  }
+}
+
+let syncing = false;
+async function runSync(loud = false) {
+  if (syncing) return;
+  syncing = true;
+  const msg = document.getElementById('sync-msg');
+  if (loud && msg) msg.textContent = 'Checking\u2026';
+  try {
+    await sync();
+  } finally {
+    syncing = false;
+    refresh();
+    if (loud) {
+      const state = describeState();
+      say(`${state.word}. ${state.detail}`);
+    }
+  }
 }
 
 export function refresh(now = Date.now()) {
@@ -286,10 +355,13 @@ export async function start() {
   try { navigator.storage?.persist?.(); } catch { /* usually false on iOS; harmless */ }
 
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('[data-give],[data-back],[data-mark],[data-round],[data-undo],#sheet-ok,#sheet-no');
+    const t = ev.target.closest('[data-give],[data-back],[data-mark],[data-round],[data-undo],#sheet-ok,#sheet-no,#sync-save,#sync-now,#sync-forget');
     if (!t) return;
     const now = Date.now();
 
+    if (t.id === 'sync-save')   { connectSync(); return; }
+    if (t.id === 'sync-now')    { runSync(true); return; }
+    if (t.id === 'sync-forget') { forgetKey(); refresh(now); say('This device is no longer sharing its log.'); return; }
     if (t.dataset.give) { give(t.dataset.give, now); return; }
     if (t.dataset.back != null) { backdateMinutes = Number(t.dataset.back); refresh(now); return; }
     if (t.dataset.mark) {
@@ -321,6 +393,13 @@ export async function start() {
   refresh();
   // The double-tap mirror counts down, so the rows need to tick.
   setInterval(() => { if (justLogged.size) refresh(); }, 3000);
+
+  // Catch up on opening, on coming back to the app, and when signal returns.
+  runSync();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') runSync();
+  });
+  window.addEventListener('online', () => runSync());
 }
 
 export const __test = { elapsed, clockLabel, totalsLine, describePastMax };
