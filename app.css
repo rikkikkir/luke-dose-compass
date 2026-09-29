@@ -413,3 +413,38 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
              border-radius: 10px; padding: 10px 12px; }
 
 .caveat { font-size: 12.5px; color: var(--ink2); margin: 8px 0 0; }
+
+/* ---- saying it instead of tapping it ------------------------------------- */
+.mic { display: block; width: 100%; text-align: left; border: 1px solid var(--line);
+       border-left: 4px solid var(--ok); background: var(--surface); color: var(--ink);
+       border-radius: 16px; padding: 18px; font: 600 18px var(--body); cursor: pointer; margin-bottom: 14px; }
+.mic.recording { border-left-color: var(--bad); background: var(--sunk); }
+.mic-icon { color: var(--ok); margin-right: 8px; }
+.mic-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+           background: var(--bad); margin-right: 8px; vertical-align: middle; }
+.mic-sub { display: block; font: 400 13px var(--body); color: var(--ink3); margin-top: 4px; }
+
+.card.pending { border-left: 4px solid var(--accent); margin-bottom: 14px; }
+.heard { margin: 8px 0 10px; font-size: 16px; line-height: 1.45; }
+.understood { margin: 0 0 4px; padding-left: 20px; font-size: 15px; }
+.understood li { margin-bottom: 3px; }
+
+#import-file { display: block; margin: 10px 0; font-size: 13px; color: var(--ink2); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mic.recording .mic-dot { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+}
+
+/* One status line for the whole app, fixed so it is readable from any screen.
+   It lives outside every render target: four bugs came from messages written
+   into markup that was about to be rebuilt. */
+.toast:empty { display: none; }
+.toast {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 596px; margin: 0 auto;
+  background: var(--ink); color: var(--bg);
+  border-radius: 10px; padding: 11px 14px;
+  font: 500 14px/1.4 var(--body); z-index: 20;
+}

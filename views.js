@@ -12,6 +12,7 @@ import {
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
 } from './store.js';
 import { hasKey, saveKey, forgetKey, testKey, sync, describeState } from './sync.js';
+import { init as initCapture, attach as attachCapture, renderCapture } from './capture.js';
 
 let regimen = null;
 let seedRegimen = null;
@@ -290,7 +291,7 @@ export function renderDrugs(root) {
     <div class="sheet-actions">
       <button class="btn primary" type="button" id="drugs-save">Save changes</button>
     </div>
-    <p class="sync-msg" id="drugs-msg"></p>
+
     <p class="foot-note">Leaving a box empty means "nobody has told me." The app would rather say unknown than invent a number.</p>`;
 }
 
@@ -320,19 +321,19 @@ function saveDrugs() {
   try {
     writeLocalRegimen(edited);
     regimen = mergeRegimen(seedRegimen, readLocalRegimen());
+  initCapture(regimen, () => refresh());
+  attachCapture();
     message = 'Saved. Doses already logged keep the numbers that applied then.';
   } catch (err) {
     message = `NOT SAVED \u2014 ${err.message}`;
   }
   refresh();
-  const msg = document.getElementById('drugs-msg');
-  if (msg) msg.textContent = message;
+  say(message);
   // No sync here: the regimen is this device's own, only events are shared.
   // runSync() would re-render asynchronously and wipe the message above.
 }
 
 async function copySevenDays() {
-  const msg = document.getElementById('sync-msg');
   const text = asText(readEvents(), regimen, { days: 7 });
   try {
     await navigator.clipboard.writeText(text);
@@ -349,7 +350,6 @@ async function copySevenDays() {
     }
     say('Could not reach the clipboard. The text is below \u2014 select and copy it.');
   }
-  if (msg) msg.textContent = '';
 }
 
 function syncCard() {
@@ -362,7 +362,6 @@ function syncCard() {
       <div class="sheet-actions">
         <button class="btn primary" type="button" id="sync-save">Connect</button>
       </div>
-      <p class="sync-msg" id="sync-msg"></p>
     </div>
     <div class="sheet-actions"><button class="btn" type="button" id="copy7">Copy the last 7 days</button></div>`;
   }
@@ -376,7 +375,6 @@ function syncCard() {
       <button class="btn" type="button" id="copy7">Copy the last 7 days</button>
       <button class="btn" type="button" id="sync-forget">Disconnect this device</button>
     </div>
-    <p class="sync-msg" id="sync-msg"></p>
   </div>`;
 }
 
@@ -436,21 +434,20 @@ function give(drugKey, now = Date.now()) {
    So the key is tested against the real repository before it is saved. */
 async function connectSync() {
   const input = document.getElementById('synckey');
-  const msg = document.getElementById('sync-msg');
   const token = (input?.value || '').trim();
-  if (!token) { if (msg) msg.textContent = 'Paste the key first.'; return; }
+  if (!token) { say('Paste the key first.'); return; }
 
-  if (msg) msg.textContent = 'Checking the key\u2026';
+  say('Checking the key\u2026');
   saveKey(token);
   try {
     await testKey();
-    if (msg) msg.textContent = 'Connected. Bringing the two logs together\u2026';
+    say('Connected. Bringing the two logs together\u2026');
     await sync();
     refresh();
     say('This device is now sharing Luke\u2019s log.');
   } catch (err) {
     forgetKey();                       // never keep a key that did not work
-    if (msg) msg.textContent = err.message;
+    say(err.message);
   }
 }
 
@@ -458,8 +455,7 @@ let syncing = false;
 async function runSync(loud = false) {
   if (syncing) return;
   syncing = true;
-  const msg = document.getElementById('sync-msg');
-  if (loud && msg) msg.textContent = 'Checking\u2026';
+  if (loud) say('Checking\u2026');
   try {
     await sync();
   } finally {
@@ -478,10 +474,12 @@ export function refresh(now = Date.now()) {
     const logEl = document.getElementById('log-body');
     const drugsEl = document.getElementById('drugs-body');
     const bodyEl = document.getElementById('body-body');
+    const capEl = document.getElementById('capture-body');
     if (nowEl) renderNow(nowEl, now);
     if (logEl) renderLog(logEl, now);
     if (drugsEl) renderDrugs(drugsEl);
     if (bodyEl) renderBody(bodyEl, now);
+    if (capEl) renderCapture(capEl);
     banner();
   } catch (err) {
     console.warn('render failed', err);   // the crisis card is untouched
@@ -535,6 +533,8 @@ export async function start() {
   }
   // Her own corrections win over the shipped seed, drug by drug.
   regimen = mergeRegimen(seedRegimen, readLocalRegimen());
+  initCapture(regimen, () => refresh());
+  attachCapture();
   try { navigator.storage?.persist?.(); } catch { /* usually false on iOS; harmless */ }
 
   document.addEventListener('click', (ev) => {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="2026-09-29.1">
+<meta name="app-version" content="2026-09-29.2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Luke's crisis card: who to call, and the signs that mean call now. Works with no signal.">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,6 +18,11 @@
 <body>
 
 <p id="storagebanner" class="storagebanner" hidden></p>
+
+<!-- The single status line. It lives here, outside every screen, because a
+     message written into markup that is about to be re-rendered is a message
+     that vanishes. That mistake has been made four times in this app. -->
+<p class="toast" id="toast" aria-live="polite"></p>
 
 <!-- Everything below renders with no JavaScript at all. app.js only enhances. -->
 
@@ -36,6 +41,7 @@
       </span>
     </a>
     <nav class="home-nav">
+      <a href="#capture">Tell it what happened</a>
       <a href="#body">His body</a>
       <a href="#now">Right now</a>
       <a href="#log">Log a dose</a>
@@ -155,9 +161,14 @@
     <h2>Log</h2>
     <p class="unknown">This screen needs JavaScript. The crisis card above does not, and still works.</p>
   </div>
-  <!-- Outside the rendered body on purpose: a live region that is destroyed
-       and recreated on every render does not announce reliably. -->
-  <p class="toast" id="toast" aria-live="polite"></p>
+</section>
+
+<section id="capture" class="view">
+  <div id="capture-body">
+    <a class="back" href="#home">&larr; Luke</a>
+    <h2>Tell it what happened</h2>
+    <p class="unknown">This screen needs JavaScript. The crisis card above does not, and still works.</p>
+  </div>
 </section>
 
 <section id="body" class="view">
@@ -179,7 +190,7 @@
 </main>
 
 <footer>
-  <p id="version">v2026-09-29.1 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
+  <p id="version">v2026-09-29.2 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
 </footer>
 
 <div id="updatebar" hidden>

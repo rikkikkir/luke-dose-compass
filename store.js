@@ -499,3 +499,84 @@ export function asText(events, regimen, { days = 7, now = Date.now() } = {}) {
   lines.push('- This app does not block doses and does not recommend them.');
   return lines.join('\n');
 }
+
+/* ===========================================================================
+   Everything that is not a dose.
+
+   Tonight's question was about food, and the app could not hold a word of it.
+   These are the other things that act on him: what he ate, what he drank,
+   what came out, where he was, how he seemed. Same event shape as a dose, same
+   append-only rules, same two timestamps, so the log stays one thing.
+   =========================================================================== */
+
+export const OBSERVATION_TYPES = ['meal', 'water', 'out', 'note', 'where', 'mood', 'weather'];
+
+export function makeObservation({ type, value, text, audioId, minutesAgo = 0,
+                                  now = Date.now(), events = [], source = 'Rikki' }) {
+  const atUTC = now - minutesAgo * 60000;
+  return {
+    id: newId(),
+    seq: nextSeq(events),
+    type,
+    value: value ?? null,        // 'all' | 'half' | 'none' | a number | a place
+    text: text ?? null,          // her own words, which are the part worth keeping
+    audioId: audioId ?? null,    // a recording lives in IndexedDB under this id
+    source,                      // 'Rikki' | 'oura' | 'maven' | 'tractive'
+    atUTC,
+    atOffset: -new Date(atUTC).getTimezoneOffset(),
+    loggedUTC: now,
+    loggedOffset: -new Date(now).getTimezoneOffset(),
+  };
+}
+
+export function logObservation(type, opts = {}) {
+  const events = readEvents();
+  const o = makeObservation({ type, ...opts, events });
+  events.push(o);
+  writeEvents(events);
+  return o;
+}
+
+export function recent(events, types, now = Date.now(), hours = 24) {
+  const from = now - hours * HOUR;
+  return inOrder(liveEvents(events))
+    .filter((e) => types.includes(e.type) && e.atUTC > from && e.atUTC <= now)
+    .reverse();
+}
+
+export function lastOf(events, type, now = Date.now()) {
+  const all = inOrder(liveEvents(events)).filter((e) => e.type === type && e.atUTC <= now);
+  return all.length ? all[all.length - 1] : null;
+}
+
+/* Did he eat, and how much? The body view needs this because Galliprant's
+   absorption depends on it, and because a dog who stops eating is the thing
+   that matters most. */
+export function ateRecently(events, now = Date.now(), hours = 3) {
+  const meals = recent(events, ['meal'], now, hours);
+  if (!meals.length) return null;
+  const m = meals[0];
+  return { at: m.atUTC, amount: m.value, text: m.text, agoMs: now - m.atUTC };
+}
+
+/* ---------------------------------------------------------------- import */
+
+/* Merging someone else's copy of the log, from a file or from the shared repo.
+   Union by id, exactly like sync: an event is immutable and an undo is its own
+   event, so two copies can only ever know different subsets of one history.
+   Nothing is overwritten and nothing is dropped. */
+export function importEvents(incoming, { now = Date.now() } = {}) {
+  if (!Array.isArray(incoming)) throw new Error('that file does not look like a log');
+  const mine = readEvents();
+  const known = new Set(mine.map((e) => e.id));
+
+  const usable = incoming.filter((e) => e && e.id && e.type && Number.isFinite(e.atUTC));
+  const added = usable.filter((e) => !known.has(e.id));
+  const skipped = incoming.length - usable.length;
+
+  if (added.length) {
+    const merged = [...mine, ...added].sort((a, b) => (a.atUTC - b.atUTC) || ((a.seq || 0) - (b.seq || 0)));
+    writeEvents(merged);
+  }
+  return { added: added.length, alreadyHad: usable.length - added.length, skipped, total: readEvents().length };
+}
