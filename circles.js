@@ -114,7 +114,8 @@ export function renderCircles(root, regimen, now = Date.now()) {
   const current = ring[0];
   const cycle = cycleLength(events, now);
 
-  const enough = ring.filter((c) => c.events.length).length >= MIN_FOR_SHAPE;
+  const filled = ring.filter((c) => c.events.length).length;
+  const enough = filled >= MIN_FOR_SHAPE;
 
   root.innerHTML = `<a class="back" href="#home">&larr; Luke</a>
     <h2>Your circles</h2>
@@ -131,7 +132,7 @@ export function renderCircles(root, regimen, now = Date.now()) {
 
     <p class="foot-note">${enough
       ? 'Each row is one ' + cycleHours() + '-hour circle, oldest at the top. Marks are placed where in the circle they happened, so rows are directly comparable.'
-      : `Only ${ring.filter((c) => c.events.length).length} circles have anything in them. Below ${MIN_FOR_SHAPE}, this shows the circles and draws no shape — a few points are not a trend.`}</p>
+      : `${filled === 1 ? 'Only 1 circle has anything in it' : `Only ${filled} circles have anything in them`}. Below ${MIN_FOR_SHAPE}, this shows the circles and draws no shape — a few points are not a trend.`}</p>
 
     ${cycle.estimated ? '' : `<details class="why">
       <summary>How long your circles actually run</summary>

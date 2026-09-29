@@ -12,6 +12,7 @@ import {
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
   loadConfig, cycleHours, stillWorking, sleepDisruption, lastOf, opioidResponse,
   labGroup, currentWeightKg, latestLabs, labStatus,
+  why,
 } from './store.js';
 import { renderCircles } from './circles.js';
 import { renderVetDoc, attachVetDoc } from './vetdoc.js';
@@ -411,7 +412,7 @@ function saveDrugs() {
     initCapture(regimen, () => refresh());
     message = 'Saved. Doses already logged keep the numbers that applied then.';
   } catch (err) {
-    message = `NOT SAVED \u2014 ${err.message}`;
+    message = `NOT SAVED \u2014 ${why(err)}`;
   }
   refresh();
   say(message);
@@ -501,7 +502,7 @@ function give(drugKey, now = Date.now()) {
     dose = logDose(drug, { minutesAgo: backdateMinutes, now });
   } catch (err) {
     // Never say "given" unless it was really written down.
-    say(`NOT SAVED. ${drug.name} was not recorded — tap Give again. (${err.message})`);
+    say(`NOT SAVED. ${drug.name} was not recorded — tap Give again. (${why(err)})`);
     return;
   }
 
@@ -533,7 +534,7 @@ async function connectSync() {
     say('This device is now sharing Luke\u2019s log.');
   } catch (err) {
     forgetKey();                       // never keep a key that did not work
-    say(err.message);
+    say(why(err));
   }
 }
 

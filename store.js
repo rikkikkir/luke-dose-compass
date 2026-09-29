@@ -298,7 +298,10 @@ export function buildupState(drug, events, now = Date.now()) {
   const doses = inOrder(liveEvents(events)).filter(
     (e) => e.type === 'dose' && e.drugKey === drug.key && e.atUTC <= now
   );
-  if (!doses.length) return { phase: 'none', icon: '·', word: 'Not logged yet', line: '' };
+  // Nothing to report rather than a phase. The card already says "Not logged
+  // yet" two lines up, and saying it again in the accent colour made an empty
+  // card look like it was telling her something.
+  if (!doses.length) return null;
 
   const days = (now - doses[0].atUTC) / (24 * HOUR);
   const { daysToEffectFrom, daysToEffectTo } = w;
@@ -511,7 +514,21 @@ export function asText(events, regimen, { days = 7, now = Date.now() } = {}) {
 
 export const OBSERVATION_TYPES = ['meal', 'water', 'out', 'note', 'where', 'mood', 'weather'];
 
-export function makeObservation({ type, value, text, audioId, minutesAgo = 0,
+/* Not everything thrown is an Error. IndexedDB rejects with a null error, and
+   reading .message off null throws a second time INSIDE the catch — which is
+   how a failed photo once produced no message at all. Every catch that shows
+   Rikki why something did not save goes through here, because "NOT SAVED" with
+   no reason is the one message in this app that must never be lost. */
+export function why(err) {
+  if (err == null) return 'the browser gave no reason';
+  if (typeof err === 'string') return err;
+  // A name like QuotaExceededError or NotAllowedError tells her something. The
+  // bare word "Error" does not, so it counts as no reason rather than a reason.
+  const m = err.message || (err.name === 'Error' ? '' : err.name);
+  return m ? String(m) : 'the browser gave no reason';
+}
+
+export function makeObservation({ type, value, text, audioId, photoId, minutesAgo = 0,
                                   now = Date.now(), events = [], source = 'Rikki' }) {
   const atUTC = now - minutesAgo * 60000;
   return {
@@ -521,6 +538,7 @@ export function makeObservation({ type, value, text, audioId, minutesAgo = 0,
     value: value ?? null,        // 'all' | 'half' | 'none' | a number | a place
     text: text ?? null,          // her own words, which are the part worth keeping
     audioId: audioId ?? null,    // a recording lives in IndexedDB under this id
+    photoId: photoId ?? null,    // and a photo, the same way
     source,                      // 'Rikki' | 'oura' | 'maven' | 'tractive'
     atUTC,
     atOffset: -new Date(atUTC).getTimezoneOffset(),
@@ -1091,4 +1109,43 @@ export function asCsv(events = readEvents(), regimen = null, { now = Date.now(),
     const s = String(c ?? '');
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\n') + '\n';
+}
+
+/* ---------------------------------------------- quality of life, HHHHHMM
+
+   Dr Alice Villalobos's scale: Hurt, Hunger, Hydration, Hygiene, Happiness,
+   Mobility, More good days than bad. Each 1 to 10.
+
+   SPEC-domain is emphatic and this is the part that matters: "The check-in
+   never produces a verdict (S7)." So this returns a total and the commonly
+   cited figure, and says in as many words that it is a conversation, never an
+   answer. It will not tell her it is time. */
+
+export const HHHHHMM = [
+  { key: 'hurt',     name: 'Hurt',      ask: 'Is his pain managed? Can he breathe comfortably?' },
+  { key: 'hunger',   name: 'Hunger',    ask: 'Is he eating enough, without a struggle?' },
+  { key: 'hydration',name: 'Hydration', ask: 'Is he drinking enough?' },
+  { key: 'hygiene',  name: 'Hygiene',   ask: 'Can he be kept clean and comfortable?' },
+  { key: 'happiness',name: 'Happiness', ask: 'Does he still show interest and pleasure?' },
+  { key: 'mobility', name: 'Mobility',  ask: 'Can he get up and move as he needs to?' },
+  { key: 'moregood', name: 'More good days than bad', ask: 'Over the last stretch, which outnumbers which?' },
+];
+
+export function scoreQol(scores) {
+  const max = cfg('qualityOfLife.hhhhhmmItemMax', 10);
+  const values = HHHHHMM.map((i) => Number(scores?.[i.key])).filter((n) => !Number.isNaN(n));
+  return {
+    total: values.reduce((a, b) => a + b, 0),
+    answered: values.length,
+    items: HHHHHMM.length,
+    outOf: HHHHHMM.length * max,
+    commonlyCited: cfg('qualityOfLife.hhhhhmmAcceptableTotal', 35),
+    complete: values.length === HHHHHMM.length,
+  };
+}
+
+export function qolChecks(events, now = Date.now(), howMany = 12) {
+  return inOrder(liveEvents(events))
+    .filter((e) => e.type === 'qol' && e.atUTC <= now)
+    .slice(-howMany);
 }

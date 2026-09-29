@@ -19,7 +19,7 @@
    Sync never blocks logging. The local log is the truth the screen renders;
    this runs behind it and catches up when there is a network. */
 
-import { readEvents, writeEvents } from './store.js';
+import { readEvents, writeEvents, why } from './store.js';
 
 const REPO = 'rikkikkir/luke-log';
 const PATH = 'events.ndjson';
@@ -182,7 +182,7 @@ export async function sync() {
       if (result && result.conflict) continue;   // the other device won the race
       return result;
     } catch (err) {
-      if (attempt === MAX_RETRIES - 1) return writeState({ lastError: err.message });
+      if (attempt === MAX_RETRIES - 1) return writeState({ lastError: why(err) });
       await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
   }

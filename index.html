@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="2026-09-29.8">
+<meta name="app-version" content="2026-09-29.9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Luke's crisis card: who to call, and the signs that mean call now. Works with no signal.">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,6 +23,13 @@
      message written into markup that is about to be re-rendered is a message
      that vanishes. That mistake has been made four times in this app. -->
 <p class="toast" id="toast" aria-live="polite"></p>
+
+<!-- The file pickers live here for the same reason. Choosing a photo takes as
+     long as she takes; if the capture screen re-renders while her picker is
+     open, an input inside that screen is replaced and the photo is lost with
+     no message. Out here, the node she opened is the node that comes back. -->
+<input type="file" id="photo-file" accept="image/*" capture="environment" hidden>
+<input type="file" id="import-file" accept=".json,.ndjson,.txt" aria-label="Log file" hidden>
 
 <!-- Everything below renders with no JavaScript at all. app.js only enhances. -->
 
@@ -226,7 +233,7 @@
 </main>
 
 <footer>
-  <p id="version">v2026-09-29.8 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
+  <p id="version">v2026-09-29.9 &middot; numbers verified 28 Sep 2026 &middot; offline copy</p>
 </footer>
 
 <div id="updatebar" hidden>
