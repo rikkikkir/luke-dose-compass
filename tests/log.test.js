@@ -349,3 +349,119 @@ test('a later definition supersedes an earlier one', () => {
   assert.equal(defs.length, 1);
   assert.equal(defs[0].label, 'new wording');
 });
+
+/* ------------------------------------- pain checks, day marks, backup, CSV */
+
+import {
+  painItems, scorePainCheck, isHighCheck, opioidFollowUpDue, opioidResponse,
+  dayMark, asCsv, setConfig, DEFAULT_PAIN_ITEMS,
+} from '../store.js';
+
+setConfig({
+  observations: { painCheckHighFraction: { value: 0.25 }, opioidFollowUpMinutes: { value: 90 },
+                  learningMinQualifyingChecks: { value: 20 } },
+  cycle: { defaultHours: { value: 25.4 }, averageOverCycles: { value: 7 } },
+  backup: { reminderDays: { value: 7 } },
+});
+
+test('the pain items are his own observed signs', () => {
+  const items = painItems([]);
+  assert.equal(items.length, 6);
+  assert.ok(items.some((i) => /right hind/i.test(i)), 'his right hind leg is one of them');
+});
+
+test('the maximum travels with the check, because she can edit the list', () => {
+  // A score "out of 12" means nothing once the list is out of 10.
+  assert.deepEqual(scorePainCheck({ 0: 2, 1: 1 }, 6), { total: 3, max: 12 });
+  assert.deepEqual(scorePainCheck({ 0: 2, 1: 1 }, 5), { total: 3, max: 10 });
+});
+
+test('high is a share of his own maximum, not a fixed number', () => {
+  assert.equal(isHighCheck({ total: 3, max: 12 }), true);   // 25%
+  assert.equal(isHighCheck({ total: 2, max: 12 }), false);
+  assert.equal(isHighCheck({ total: 3, max: 20 }), false, 'same score, longer list, not high');
+});
+
+test('the opioid follow-up is offered in a window and then lets go', () => {
+  const reg = { drugs: [{ key: 'tramadol', name: 'Tramadol', asNeeded: true,
+                          acts: [{ system: 'joints', effect: '', tier: 'known' }] }] };
+  const dose = (msAgo) => [makeDose({ drug: reg.drugs[0], now: T0 - msAgo, events: [] })];
+  assert.equal(opioidFollowUpDue(dose(30 * 60000), reg, T0), null, 'too early');
+  assert.ok(opioidFollowUpDue(dose(95 * 60000), reg, T0), 'in the window');
+  assert.equal(opioidFollowUpDue(dose(5 * HOUR), reg, T0), null, 'the moment passes, it does not nag');
+});
+
+test('a pain check already taken cancels the offer', () => {
+  const reg = { drugs: [{ key: 'tramadol', name: 'Tramadol', asNeeded: true,
+                          acts: [{ system: 'joints', effect: '', tier: 'known' }] }] };
+  const events = [makeDose({ drug: reg.drugs[0], now: T0 - 95 * 60000, events: [] })];
+  assert.ok(opioidFollowUpDue(events, reg, T0));
+  events.push({ id: 'p1', seq: 9, type: 'paincheck', total: 2, max: 12,
+                atUTC: T0 - 60000, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+  assert.equal(opioidFollowUpDue(events, reg, T0), null);
+});
+
+test('the observed window is withheld until there are enough qualifying checks', () => {
+  // SPEC-domain: learningMinQualifyingChecks before anything is shown, and
+  // the observed window never replaces the published one.
+  const reg = { drugs: [{ key: 'tramadol', name: 'Tramadol', asNeeded: true,
+    window: { kind: 'perDose', durationHoursFrom: 4, durationHoursTo: 6 },
+    acts: [{ system: 'joints', effect: '', tier: 'known' }] }] };
+  // Doses twelve hours apart with a check five hours after each, which is what
+  // a real run looks like. Packed closer, the "no other pain medicine in
+  // between" rule correctly disqualifies every one of them.
+  const events = [];
+  for (let i = 0; i < 3; i++) {
+    const at = T0 - (40 - i * 12) * HOUR;
+    events.push({ id: `d${i}`, seq: i * 2, type: 'dose', drugKey: 'tramadol', tablets: 1,
+      atUTC: at, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+    events.push({ id: `c${i}`, seq: i * 2 + 1, type: 'paincheck', total: 5, max: 12,
+      atUTC: at + 5 * HOUR, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+  }
+  const r = opioidResponse(events, reg, T0);
+  assert.equal(r.qualifying, 3);
+  assert.equal(r.enough, false);
+  assert.equal(r.observed, null, 'nothing claimed from three points');
+});
+
+test('a pain dose in between disqualifies the check that follows it', () => {
+  // The rule exists so a check cannot be credited to the wrong dose.
+  const reg = { drugs: [{ key: 'tramadol', name: 'Tramadol', asNeeded: true,
+      window: { kind: 'perDose', durationHoursFrom: 4, durationHoursTo: 6 },
+      acts: [{ system: 'joints', effect: '', tier: 'known' }] },
+    { key: 'galliprant', name: 'Galliprant',
+      acts: [{ system: 'joints', effect: '', tier: 'known' }] }] };
+  const events = [
+    { id: 'd', seq: 1, type: 'dose', drugKey: 'tramadol', tablets: 1,
+      atUTC: T0 - 10 * HOUR, atOffset: 0, loggedUTC: T0, loggedOffset: 0 },
+    { id: 'g', seq: 2, type: 'dose', drugKey: 'galliprant', tablets: 1,
+      atUTC: T0 - 8 * HOUR, atOffset: 0, loggedUTC: T0, loggedOffset: 0 },
+    { id: 'c', seq: 3, type: 'paincheck', total: 5, max: 12,
+      atUTC: T0 - 5 * HOUR, atOffset: 0, loggedUTC: T0, loggedOffset: 0 },
+  ];
+  assert.equal(opioidResponse(events, reg, T0).qualifying, 0);
+});
+
+test('a day can be marked, and re-marked', () => {
+  const mk = (value, msAgo) => ({ id: `m${msAgo}`, seq: msAgo, type: 'dayMark', value,
+    atUTC: T0 - msAgo, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+  assert.equal(dayMark([mk('bad', 5000), mk('good', 100)], T0).value, 'good');
+  assert.equal(dayMark([], T0), null);
+});
+
+test('the CSV has a header, one row per event, and quotes what it must', () => {
+  // ROADMAP's done-when is literally "the CSV opens in Numbers".
+  const reg = { drugs: [{ key: 'furosemide', name: 'Furosemide', strengthMg: 40 }] };
+  const events = [
+    { id: 'a', seq: 1, type: 'dose', drugKey: 'furosemide', tablets: 3, atUTC: T0 - HOUR,
+      atOffset: -360, loggedUTC: T0, loggedOffset: -360, source: 'Rikki' },
+    { id: 'b', seq: 2, type: 'note', text: 'he ate, then "settled", oddly',
+      atUTC: T0 - 100, atOffset: -360, loggedUTC: T0, loggedOffset: -360 },
+  ];
+  const csv = asCsv(events, reg, { now: T0 });
+  const lines = csv.trim().split('\n');
+  assert.equal(lines.length, 3, 'header plus two rows');
+  assert.match(lines[0], /^when,local time,what/);
+  assert.match(lines[1], /Furosemide,3,120/, 'milligrams are worked out');
+  assert.match(lines[2], /"he ate, then ""settled"", oddly"/, 'commas and quotes survive');
+});

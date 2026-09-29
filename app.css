@@ -538,3 +538,31 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .helper-warn { background: var(--sunk); border-left: 4px solid var(--bad);
                border-radius: 8px; padding: 12px 14px; }
 .helper-small { font-size: 12px; color: var(--ink3); }
+
+/* ---- pain check, day mark, follow-up ------------------------------------- */
+.card.pain { border-left: 4px solid var(--accent); }
+.card.followup { border-left: 4px solid var(--warn); }
+.painrow { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.painrow:last-of-type { border-bottom: 0; }
+.painrow .chips { margin-top: 6px; }
+
+/* ---- night mode ----------------------------------------------------------
+   ROADMAP milestone 1: "dim and warm, for the sleep window." Her cycle is not
+   a clock, so this follows the log rather than the hour: it turns on when a
+   sleep has been marked and no wake since. Nothing is hidden and no contrast
+   drops below readable — at 4am she still has to read a phone number. */
+body.night {
+  --bg: #17120E;
+  --surface: #1F1813;
+  --sunk: #2A211A;
+  --ink: #EFE3D6;
+  --ink2: #BFAE9C;
+  --ink3: #9A8878;
+  --line: #3A2E24;
+  --accent: #E0B487;
+  --onaccent: #17120E;
+  --ok: #8FBF86;
+  --warn: #E0B15A;
+  --bad: #E58C72;
+}
+body.night img, body.night .portrait { filter: brightness(.88) sepia(.12); }

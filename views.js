@@ -10,7 +10,7 @@ import {
   effectWindow, buildupState, bodyState,
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
-  loadConfig, cycleHours, stillWorking, sleepDisruption,
+  loadConfig, cycleHours, stillWorking, sleepDisruption, lastOf, opioidResponse,
   labGroup, currentWeightKg, latestLabs, labStatus,
 } from './store.js';
 import { renderCircles } from './circles.js';
@@ -215,6 +215,29 @@ function forecastBlock(events, now) {
   </li>`;
 }
 
+/* SPEC-domain: "Show Luke's observed relief window next to the model's
+   estimate... The observed window never replaces the model's estimate." */
+function responseBlock(events, now) {
+  const r = opioidResponse(events, regimen, now);
+  if (!r) return '';
+  const drug = (regimen.drugs || []).find((d) => d.asNeeded);
+  const published = drug && drug.window
+    ? `${drug.window.durationHoursFrom}\u2013${drug.window.durationHoursTo} hours`
+    : 'not published';
+
+  return `<li class="sys">
+    <h3>What his own checks say</h3>
+    <p class="sys-effect">Published window for ${esc(drug ? drug.name : 'it')}: <b>${published}</b>.</p>
+    ${r.enough
+      ? `<p class="sys-effect">His own checks, across ${r.qualifying} that qualified: discomfort tended to return
+         <b>about ${r.observed.median.toFixed(1)} hours</b> after a dose, between ${r.observed.from.toFixed(1)} and ${r.observed.to.toFixed(1)}.</p>
+         <p class="sys-note">Shown beside the published window, not instead of it.</p>`
+      : `<p class="unknown">${r.qualifying} of ${r.need} qualifying checks so far. Below that, there is nothing here worth saying.</p>
+         <p class="sys-note">A check qualifies when it is the first high one after a dose, with no other pain medicine in between.</p>`}
+    <p class="tierlabel">From your own pain checks \u00b7 no recommendation is made from this</p>
+  </li>`;
+}
+
 export function renderBody(root, now = Date.now()) {
   if (!regimen) { root.innerHTML = '<p class="unknown">Loading\u2026</p>'; return; }
   const events = readEvents();
@@ -225,6 +248,7 @@ export function renderBody(root, now = Date.now()) {
     <p class="interp">Interpretation, not measurement. Nothing here senses Luke.</p>
     <ul class="systems">${state.map(systemCard).join('')}</ul>
     ${forecastBlock(events, now)}
+    ${responseBlock(events, now)}
     <p class="foot-note">${esc(regimen.interactionsNote || '')}</p>
     <p class="foot-note">This never diagnoses and never recommends a dose. What Luke shows you is better evidence than anything on this screen.</p>`;
 }
@@ -530,8 +554,18 @@ async function runSync(loud = false) {
   }
 }
 
+/* "Night mode: dim and warm, for the sleep window." Her cycle is not a clock,
+   so this follows the log: on when a sleep is marked and no wake since. */
+function nightMode(events, now) {
+  const sleep = lastOf(events, 'sleep', now);
+  const wake = lastOf(events, 'wake', now);
+  const sleeping = sleep && (!wake || wake.atUTC < sleep.atUTC);
+  document.body.classList.toggle('night', !!sleeping);
+}
+
 export function refresh(now = Date.now()) {
   try {
+    nightMode(readEvents(), now);
     const nowEl = document.getElementById('now-body');
     const logEl = document.getElementById('log-body');
     const drugsEl = document.getElementById('drugs-body');

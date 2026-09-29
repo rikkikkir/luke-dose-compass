@@ -494,3 +494,58 @@ test('the Understand tab carries the guide, and says it is a draft', async ({ pa
   // And no dangling references to files that do not exist in the app.
   expect(await u.innerText()).not.toContain('../');
 });
+
+test('a pain check records his own signs, and calls itself hers', async ({ page }) => {
+  // She can start one whenever she wants — it is not only offered after a dose.
+  await page.goto('/index.html#capture');
+  await page.locator('#pain-open').click();
+
+  await expect(page.locator('.painrow')).toHaveCount(6);
+  await expect(page.locator('.card.pain')).toContainText('Right hind leg gives out');
+  await expect(page.locator('.card.pain')).toContainText('not a clinical score');
+
+  await page.locator('[data-pain="0"][data-pval="2"]').click();
+  await page.locator('[data-pain="1"][data-pval="1"]').click();
+  await page.locator('#pain-save').click();
+  await expect(page.locator('#toast')).toContainText('3 of 12');
+});
+
+test('a circle can be marked good, mixed or hard', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('[data-day="bad"]').click();
+  await expect(page.locator('#toast')).toContainText('Marked');
+  await expect(page.locator('[data-day="bad"]')).toHaveClass(/primary/);
+  await page.locator('[data-day="good"]').click();
+  await expect(page.locator('[data-day="good"]')).toHaveClass(/primary/);
+});
+
+test('the observed relief window is withheld, and says what it is waiting for', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="tramadol"]').click();
+  await page.goto('/index.html#body');
+  const block = page.locator('.sys', { hasText: 'What his own checks say' });
+  await expect(block).toContainText('Published window');
+  await expect(block).toContainText('qualifying checks so far');
+  await expect(block).toContainText('no recommendation is made from this');
+});
+
+test('night mode follows the log, not the clock', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await expect(page.locator('body')).not.toHaveClass(/night/);
+  await page.locator('[data-mark="sleep"]').click();
+  await expect(page.locator('body')).toHaveClass(/night/);
+  await page.locator('[data-mark="wake"]').click();
+  await expect(page.locator('body')).not.toHaveClass(/night/);
+});
+
+test('a spreadsheet can be saved, and it is named so git cannot publish it', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('#backup-details summary').click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#export-csv').click(),
+  ]);
+  // .gitignore already carries *.export.* — the name is the safeguard.
+  expect(download.suggestedFilename()).toBe('luke.export.csv');
+  await expect(page.locator('#toast')).toContainText('opens in Numbers');
+});
