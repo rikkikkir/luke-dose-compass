@@ -522,3 +522,19 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .check-detail { margin: 4px 0 0; font-size: 12.5px; color: var(--ink3); line-height: 1.45; }
 .check-actions { display: flex; flex-direction: column; gap: 6px; }
 .check-actions .btn { padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+
+/* ---- the page for whoever is standing in ---------------------------------- */
+.helper { background: var(--surface); border: 1px solid var(--line);
+          border-radius: 12px; padding: 18px 20px; margin-top: 14px; font-size: 15px; line-height: 1.55; }
+.helper h3 { font-size: 16px; margin: 22px 0 8px; border-top: 1px solid var(--line); padding-top: 16px; }
+.helper h3:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.helper h4 { font-size: 14px; margin: 12px 0 4px; color: var(--ink2); }
+.helper p { margin: 0 0 10px; }
+.helper ul { margin: 0 0 10px; padding-left: 20px; }
+.helper li { margin-bottom: 5px; }
+.helper-urgent li { margin-bottom: 8px; }
+.helper-call { background: var(--sunk); border-left: 4px solid var(--ok);
+               border-radius: 8px; padding: 12px 14px; }
+.helper-warn { background: var(--sunk); border-left: 4px solid var(--bad);
+               border-radius: 8px; padding: 12px 14px; }
+.helper-small { font-size: 12px; color: var(--ink3); }

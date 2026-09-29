@@ -15,6 +15,7 @@ import {
 } from './store.js';
 import { renderCircles } from './circles.js';
 import { renderVetDoc, attachVetDoc } from './vetdoc.js';
+import { renderHelper, renderUnderstand, loadGuide, attachHelper } from './helper.js';
 import { hasKey, saveKey, forgetKey, testKey, sync, describeState } from './sync.js';
 import { init as initCapture, attach as attachCapture, renderCapture } from './capture.js';
 
@@ -538,6 +539,8 @@ export function refresh(now = Date.now()) {
     const capEl = document.getElementById('capture-body');
     const cirEl = document.getElementById('circles-body');
     const vetEl = document.getElementById('vet-body');
+    const helpEl = document.getElementById('helper-body');
+    const undEl = document.getElementById('understand-body');
     if (nowEl) renderNow(nowEl, now);
     if (logEl) renderLog(logEl, now);
     if (drugsEl) renderDrugs(drugsEl);
@@ -545,6 +548,8 @@ export function refresh(now = Date.now()) {
     if (capEl) renderCapture(capEl);
     if (cirEl) renderCircles(cirEl, regimen, now);
     if (vetEl) renderVetDoc(vetEl, regimen);
+    if (helpEl) renderHelper(helpEl, regimen, now);
+    if (undEl) renderUnderstand(undEl);
     banner();
   } catch (err) {
     console.warn('render failed', err);   // the crisis card is untouched
@@ -602,6 +607,8 @@ export async function start() {
   initCapture(regimen, () => refresh());
   attachCapture();
   attachVetDoc(() => regimen, say);
+  attachHelper();
+  loadGuide(document.baseURI).then(() => refresh());
   try { navigator.storage?.persist?.(); } catch { /* usually false on iOS; harmless */ }
 
   document.addEventListener('click', (ev) => {
