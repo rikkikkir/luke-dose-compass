@@ -14,6 +14,7 @@
 
 import {
   readEvents, liveEvents, inOrder, lastDose, cycleLength, cycleHours, cfg, HOUR,
+  latestLabs, labStatus, currentWeightKg, STALE_DAYS,
 } from './store.js';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -124,6 +125,36 @@ export function buildVetDoc(regimen, { events = readEvents(), now = Date.now(), 
   if (asked.length) asked.forEach((a) => L.push(a));
   else L.push('_None recorded._');
   L.push('');
+
+  /* ---- his own values, with their dates ---- */
+  const labs = latestLabs(events, now);
+  if (labs.size) {
+    L.push('## His recorded values');
+    L.push('');
+    L.push(`Imported from his compendium. Each carries the day it was taken; anything older than ${STALE_DAYS} days is marked, because a stale figure presented as current is worse than none.`);
+    L.push('');
+    const out = [];
+    for (const lab of labs.values()) {
+      const st = labStatus(lab, now);
+      if (!st) continue;
+      const flag = st.high ? 'above range' : st.low ? 'below range' : 'in range';
+      const range = st.range ? ` (ref ${st.range})` : ' (no reference range published)';
+      const age = st.stale ? `  **— ${Math.round(st.ageDays)} days old**` : '';
+      out.push({ st, line: `- **${lab.name}** ${lab.value}${lab.unit ? ' ' + lab.unit : ''} — ${flag}${range}, ${new Date(lab.atUTC).toISOString().slice(0, 10)}${age}` });
+    }
+    // Out of range first: that is what a reader is scanning for.
+    out.sort((a, b) => (b.st.high || b.st.low ? 1 : 0) - (a.st.high || a.st.low ? 1 : 0));
+    out.forEach((o) => L.push(o.line));
+    L.push('');
+    L.push('_These are values only. This app does not interpret them, does not group them into a picture, and draws no conclusion from them._');
+    L.push('');
+  }
+
+  const weight = currentWeightKg(events, now);
+  if (weight) {
+    L.push(`**Weight used for any milligrams-per-kilogram figure:** ${weight.kg.toFixed(1)} kg, recorded ${new Date(weight.at).toISOString().slice(0, 10)}${weight.stale ? ` — **${Math.round(weight.ageDays)} days ago, so those figures are out of date**` : ''}.`);
+    L.push('');
+  }
 
   /* ---- the log ---- */
   L.push(`## What actually happened, last ${days} days`);

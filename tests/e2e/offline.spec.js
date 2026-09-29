@@ -374,3 +374,49 @@ test('his weight can be refreshed, and a blank is refused', async ({ page }) => 
   await expect(page.locator('#toast')).toContainText('34.8 kg');
   await expect(page.locator('#capture-body')).toContainText('Weighed 34.8 kg');
 });
+
+test('imported labs appear with their ranges, dates, and staleness', async ({ page }) => {
+  const line = (key, name, value, unit, lo, hi, daysAgo) => JSON.stringify({
+    id: `lab-${key}`, seq: 1, type: 'lab', labKey: key, name, value, unit,
+    refLow: lo, refHigh: hi, atUTC: Date.now() - daysAgo * 86400000,
+    atOffset: 0, loggedUTC: Date.now(), loggedOffset: 0, source: 'compendium',
+  });
+  await page.goto('/index.html#capture');
+  await page.locator('#import-details summary').click();
+  await page.locator('#import-file').setInputFiles({
+    name: 'labs.ndjson', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from([
+      line('crea', 'Creatinine', 2.5, 'mg/dL', 0.5, 1.5, 15),
+      line('phos', 'Phosphorus', 2.9, 'mg/dL', 2.5, 6.1, 204),
+      line('weight', 'Body weight', 79.1, 'lb', 78, 82, 208),
+    ].join('\n')),
+  });
+  await expect(page.locator('#toast')).toContainText('Added 3');
+
+  await page.goto('/index.html#body');
+  const water = page.locator('.sys', { hasText: 'Kidneys and water' });
+  await expect(water).toContainText('Creatinine');
+  await expect(water).toContainText('above range');
+  await expect(water).toContainText('0.5–1.5');
+  // A six-month-old value must not be presented as current.
+  await expect(water.locator('.lab.stale')).toHaveCount(1);
+  await expect(water).toContainText('days old');
+  // And the app must draw no conclusion from a group of values.
+  await expect(water).toContainText('no conclusion drawn');
+});
+
+test('a stale weight makes every mg/kg figure say so', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('#import-details summary').click();
+  await page.locator('#import-file').setInputFiles({
+    name: 'w.ndjson', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from(JSON.stringify({
+      id: 'lab-weight', seq: 1, type: 'lab', labKey: 'weight', name: 'Body weight',
+      value: 79.1, valueKg: 35.88, unit: 'lb', atUTC: Date.now() - 208 * 86400000,
+      atOffset: 0, loggedUTC: Date.now(), loggedOffset: 0, source: 'compendium',
+    })),
+  });
+  await page.goto('/index.html#now');
+  await expect(page.locator('#now')).toContainText('mg/kg per dose');
+  await expect(page.locator('#now')).toContainText('so this figure is out of date');
+});

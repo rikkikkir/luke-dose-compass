@@ -11,6 +11,7 @@ import {
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
   loadConfig, cycleHours, stillWorking, sleepDisruption,
+  labGroup, currentWeightKg, latestLabs, labStatus,
 } from './store.js';
 import { renderCircles } from './circles.js';
 import { renderVetDoc, attachVetDoc } from './vetdoc.js';
@@ -79,6 +80,13 @@ function nowRow(drug, events, now) {
 
   body += `<p class="row-total">${esc(totalsLine(drug, events, now))}</p>`;
 
+  const weight = currentWeightKg(events, now);
+  if (weight && drug.strengthMg && drug.tabletsPerDose) {
+    const perKg = (drug.strengthMg * drug.tabletsPerDose) / weight.kg;
+    body += `<p class="row-total">${perKg.toFixed(2)} mg/kg per dose, at ${weight.kg.toFixed(1)} kg${
+      weight.stale ? ` \u2014 <b>weighed ${Math.round(weight.ageDays)} days ago</b>, so this figure is out of date` : ''}</p>`;
+  }
+
   // One path for every drug now, driven by regimen.json. A drug with no
   // sourced window produces nothing here rather than a guess.
   const state = buildupState(drug, events, now) || (last ? effectWindow(drug, since) : null);
@@ -114,6 +122,25 @@ function nowRow(drug, events, now) {
    dashed and dimmed. S4 everywhere - icon plus word, ranges not numbers.
    S7 everywhere - this never diagnoses and never recommends a dose. */
 
+function labBlock(system, events, now) {
+  const groups = ['kidney', 'hydration', 'liver']
+    .map((k) => labGroup(k, events, now))
+    .filter((g) => g && g.system === system.key);
+  if (!groups.length) return '';
+
+  return groups.map((g) => `<div class="labs">
+    <p class="k dim">${esc(g.name)} \u00b7 from his records</p>
+    <ul class="lablist">${g.values.map((v) => `<li class="lab${v.stale ? ' stale' : ''}">
+      <span class="lab-name">${esc(v.lab.name)}</span>
+      <span class="lab-val">${v.lab.value}${v.lab.unit ? ' ' + esc(v.lab.unit) : ''}</span>
+      <span class="lab-flag">${v.icon} ${esc(v.word)}${v.range ? ` (${v.range})` : ''}</span>
+      <span class="lab-when">${new Date(v.lab.atUTC).toISOString().slice(0, 10)}${v.stale ? ` \u00b7 ${Math.round(v.ageDays)} days old` : ''}</span>
+    </li>`).join('')}</ul>
+    ${g.note ? `<p class="sys-note">${esc(g.note)}</p>` : ''}
+    <p class="tierlabel">From his records \u00b7 values only, no conclusion drawn</p>
+  </div>`).join('');
+}
+
 function systemCard(entry) {
   const { system, acting, interactions, caveats } = entry;
 
@@ -121,6 +148,7 @@ function systemCard(entry) {
     return `<li class="sys sys-quiet">
       <h3>${esc(system.name)}</h3>
       <p class="unknown">Nothing logged that acts here right now.</p>
+      ${labBlock(system, readEvents(), Date.now())}
       <p class="sys-note">${esc(system.note)}</p></li>`;
   }
 
@@ -150,6 +178,7 @@ function systemCard(entry) {
   return `<li class="sys">
     <h3>${esc(system.name)}</h3>
     ${lines}${inter}
+    ${labBlock(system, readEvents(), Date.now())}
     <details class="why"><summary>What this part assumes</summary>
       <p class="sys-note">${esc(system.note)}</p>
       ${caveats.map((c) => `<p class="caveat"><b>${esc(c.drug)}:</b> ${esc(c.text)}</p>`).join('')}

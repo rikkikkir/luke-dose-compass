@@ -759,3 +759,90 @@ export function sleepDisruption(events, regimen, now = Date.now()) {
     vq: 'VQ-18',
   };
 }
+
+/* ===========================================================================
+   Luke's own laboratory history.
+
+   All of this was already in Rikki's records — the compendium publishes every
+   recorded value — while the app carried a handful hardcoded from a dated
+   snapshot. Hardcoding meant it could not see a trend and, worse, could not
+   notice when a number had gone stale. His weight is the sharpest case: the
+   app treated 79.1 lb as current when the measurement is from March.
+
+   Brought in as events like everything else, so they sync, they never
+   overwrite, and each one carries the day it was taken.
+   =========================================================================== */
+
+/* How old a value may be before the app stops presenting it as current. */
+export const STALE_DAYS = 90;
+
+export function latestLabs(events, now = Date.now()) {
+  const out = new Map();
+  for (const e of inOrder(liveEvents(events))) {
+    if (e.type !== 'lab' || e.atUTC > now) continue;
+    out.set(e.labKey, e);          // inOrder ascending, so the last wins
+  }
+  return out;
+}
+
+export function labStatus(lab, now = Date.now()) {
+  if (!lab) return null;
+  const ageDays = (now - lab.atUTC) / (24 * HOUR);
+  const high = lab.refHigh != null && lab.value > lab.refHigh;
+  const low = lab.refLow != null && lab.value < lab.refLow;
+  return {
+    lab,
+    ageDays,
+    stale: ageDays > STALE_DAYS,
+    high, low,
+    // Icon plus word, never colour alone (S4).
+    icon: high ? '▲' : low ? '▼' : '✓',
+    word: high ? 'above range' : low ? 'below range' : 'in range',
+    range: lab.refLow != null && lab.refHigh != null ? `${lab.refLow}–${lab.refHigh}` : null,
+  };
+}
+
+/* Luke's most recent weight, in kilograms, with how old it is.
+
+   This exists because a milligrams-per-kilogram figure computed against a
+   seven-month-old weight is not a milligrams-per-kilogram figure. The app
+   must say how old the number is wherever it uses it. */
+export function currentWeightKg(events, now = Date.now()) {
+  const lab = latestLabs(events, now).get('weight');
+  if (!lab) return null;
+  const kg = lab.valueKg != null ? lab.valueKg : lab.value * 0.45359237;
+  const ageDays = (now - lab.atUTC) / (24 * HOUR);
+  return { kg, ageDays, at: lab.atUTC, stale: ageDays > STALE_DAYS, source: lab.source || 'unknown' };
+}
+
+/* Values that describe the same thing, grouped so a vet reading them sees the
+   picture rather than a list. DESCRIPTION ONLY — the app never names a
+   condition and never draws a conclusion from a group (S7). */
+export const LAB_GROUPS = [
+  { key: 'kidney', name: 'Kidney', system: 'water',
+    labs: ['crea', 'bun', 'sdma', 'phos', 'buncrea'] },
+  { key: 'liver', name: 'Liver and protein', system: 'gut',
+    labs: ['alt', 'alkp', 'alb', 'tprot'] },
+  { key: 'blood', name: 'Blood count', system: 'breathing',
+    labs: ['mono', 'lymph', 'plt', 'hct', 'wbc'] },
+];
+
+/* Deliberately NOT a "fluid balance" group.
+
+   An earlier version grouped sodium, chloride, osmolality and haematocrit and
+   told Rikki they pointed one way. Checked against the reference ranges in her
+   own records: sodium, chloride and haematocrit are all IN range, and
+   osmolality has no published range at all. The story was invented from
+   memory while the real numbers sat in the file.
+
+   Markers are now shown with their own ranges and their own dates, grouped
+   only by the organ they describe, and the app draws no picture from them
+   (S7). Noticing a pattern across values is a vet's job. */
+
+export function labGroup(groupKey, events, now = Date.now()) {
+  const group = LAB_GROUPS.find((g) => g.key === groupKey);
+  if (!group) return null;
+  const latest = latestLabs(events, now);
+  const found = group.labs.map((k) => labStatus(latest.get(k), now)).filter(Boolean);
+  return found.length ? { ...group, values: found } : null;
+}
