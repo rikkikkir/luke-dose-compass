@@ -56,8 +56,8 @@ test('the crisis card survives the network going away entirely', async ({ page }
     const bridger = page.locator('a.tel[href="tel:+14065484226"]');
     await expect(bridger).toBeVisible();
     await expect(bridger).toHaveText('(406) 548-4226');
-    await expect(page.getByText('retching without bringing anything up')).toBeVisible();
-    await expect(page.getByText('Draft, not yet vet-reviewed')).toBeVisible();
+    await expect(page.locator('#crisis').getByText('retching without bringing anything up')).toBeVisible();
+    await expect(page.locator('#crisis').getByText('Draft, not yet vet-reviewed')).toBeVisible();
     await expect(page.locator('#crisis')).toBeVisible();
   } finally {
     server.stop();
@@ -321,7 +321,7 @@ test('an empty circle says nothing was logged, not zero of everything', async ({
 
 test('the vet document explains what the app refuses to claim', async ({ page }) => {
   await page.goto('/index.html#vet');
-  const doc = page.locator('.vetdoc');
+  const doc = page.locator('#vet .vetdoc');
   await expect(doc).toBeVisible();
   await expect(doc).toContainText('not a medical device');
   await expect(doc).toContainText('What the app refuses to estimate');
@@ -341,8 +341,8 @@ test('the vet document carries what actually happened', async ({ page }) => {
   await page.goto('/index.html#capture');
   await page.locator('[data-obs="meal"][data-val="half"]').click();
   await page.goto('/index.html#vet');
-  await expect(page.locator('.vetdoc')).toContainText('Tramadol');
-  await expect(page.locator('.vetdoc')).toContainText('ate: half');
+  await expect(page.locator('#vet .vetdoc')).toContainText('Tramadol');
+  await expect(page.locator('#vet .vetdoc')).toContainText('ate: half');
 });
 
 test('what is still working in him shows after a dose, and never as a schedule', async ({ page }) => {
@@ -457,4 +457,40 @@ test('marking a check as changed says it is worth telling the vet', async ({ pag
   });
   await page.locator('[data-check="cheek"][data-cval="changed"]').click();
   await expect(page.locator('#toast')).toContainText('Worth mentioning to his vet');
+});
+
+test('the helper page works with an empty log and never tells anyone to dose', async ({ page }) => {
+  // The person who needs this page may never have opened the app, and the log
+  // may be empty. It has to be useful anyway.
+  await page.goto('/index.html#helper');
+  const h = page.locator('.helper');
+  await expect(h).toBeVisible();
+  await expect(h).toContainText('Bridger');
+  await expect(h).toContainText('(406) 548-4226');
+  await expect(h).toContainText('Trouble breathing');
+  await expect(h).toContainText('Do not give any medicine unless Rikki or a vet tells you to');
+  await expect(h).toContainText('Ask Rikki what he has had before giving anything');
+  // It states the goals of care, because a stranger would not know them.
+  await expect(h).toContainText('no CPR and no hospitalisation');
+});
+
+test('the helper page shows what he has actually had, once something is logged', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
+  await page.goto('/index.html#helper');
+  await expect(page.locator('.helper')).toContainText('Furosemide');
+  await expect(page.locator('.helper')).toContainText('last at');
+});
+
+test('the Understand tab carries the guide, and says it is a draft', async ({ page }) => {
+  await page.goto('/index.html#understand');
+  const u = page.locator('#understand-body');
+  await expect(u.locator('.draft')).toContainText('Draft, not yet vet-reviewed');
+  await expect(u).toContainText('Urgent signs');
+  await expect(u).toContainText('Reading lab values');
+  // Rendered as a document, not raw markup.
+  await expect(u.locator('article.guide h3').first()).toBeVisible();
+  expect(await u.innerText()).not.toContain('##');
+  // And no dangling references to files that do not exist in the app.
+  expect(await u.innerText()).not.toContain('../');
 });
