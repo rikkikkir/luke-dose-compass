@@ -14,7 +14,7 @@
    That is what makes a corrected phone number reach the phone without
    depending on the service-worker lifecycle firing correctly. */
 
-const VERSION = '2026-09-29.4';          // bump on EVERY deploy
+const VERSION = '2026-09-29.5';          // bump on EVERY deploy
 const CACHE   = `luke-crisis-${VERSION}`;
 
 const SHELL = [

@@ -307,3 +307,52 @@ test('markers are grouped by organ, and no story is attached to a group', () => 
 test('a group with nothing recorded is absent, not empty', () => {
   assert.equal(labGroup('kidney', [], T0), null);
 });
+
+/* --------------------------------- his own signal, and the thirty-second check */
+
+import { circles, carrotCounts, carrotTrend, checksDue, checkDefs } from '../store.js';
+
+const obs = (type, value, msAgo) => ({
+  id: `o-${type}-${msAgo}`, seq: 1, type, value,
+  atUTC: T0 - msAgo, atOffset: 0, loggedUTC: T0, loggedOffset: 0, source: 'Rikki',
+});
+
+test('something logged this instant lands in the current circle', () => {
+  // With no wake logged the circle starts at now, and a strict boundary made
+  // it empty — so a carrot counted on opening the app vanished immediately.
+  const events = [obs('carrots', 3, 0)];
+  assert.equal(circles(events, T0, 1)[0].events.length, 1);
+  assert.equal(carrotCounts(events, T0, 1)[0].count, 3);
+});
+
+test('carrots add up within a circle', () => {
+  const events = [obs('carrots', 5, 1000), obs('carrots', 2, 500)];
+  assert.equal(carrotCounts(events, T0, 1)[0].count, 7);
+});
+
+test('a drop is only claimed once there is enough to compare against', () => {
+  // The signal is the change, so with one or two circles there is nothing to
+  // say and the app must not say it.
+  const thin = carrotTrend([obs('carrots', 2, 0)], T0);
+  assert.equal(thin.enough, false);
+  assert.equal(thin.today, 2);
+});
+
+test('a check is due by elapsed time, not by calendar day', () => {
+  // A "daily" check on a 25.4-hour day is once per circle, not once per date.
+  const def = { id: 'd1', seq: 1, type: 'checkdef', checkKey: 'cheek', label: 'Cheek bump',
+                detail: '', every: 'weekly', atUTC: T0 - 100 * HOUR, atOffset: 0,
+                loggedUTC: T0, loggedOffset: 0 };
+  const done = { id: 'c1', seq: 2, type: 'check', checkKey: 'cheek', value: 'ok',
+                 atUTC: T0 - 2 * HOUR, atOffset: 0, loggedUTC: T0, loggedOffset: 0 };
+  assert.equal(checksDue([def], T0)[0].due, true, 'never checked, so due');
+  assert.equal(checksDue([def, done], T0)[0].due, false, 'just checked, so not');
+});
+
+test('a later definition supersedes an earlier one', () => {
+  const mk = (label, msAgo) => ({ id: `d${msAgo}`, seq: 1, type: 'checkdef', checkKey: 'cheek',
+    label, detail: '', every: 'weekly', atUTC: T0 - msAgo, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+  const defs = checkDefs([mk('old wording', 10000), mk('new wording', 100)], T0);
+  assert.equal(defs.length, 1);
+  assert.equal(defs[0].label, 'new wording');
+});

@@ -511,3 +511,18 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 /* A value old enough to be misleading says so by looking faded. */
 .lab.stale .lab-val, .lab.stale .lab-name { opacity: .6; }
 .lab.stale .lab-when { color: var(--warn); }
+
+/* ---- his own signal, and the thirty-second check -------------------------- */
+.card.carrots { border-left: 4px solid var(--ok); margin-bottom: 12px; }
+/* A drop is the signal, so a drop is what changes the card. */
+.card.carrots.down { border-left-color: var(--warn); background: var(--sunk); }
+.carrot-line { margin: 8px 0 12px; font-size: 15px; line-height: 1.5; }
+.chip.primary { background: var(--accent); color: var(--onaccent); border-color: var(--accent); }
+
+.checkrow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start;
+            padding: 12px 0; border-bottom: 1px solid var(--line); }
+.checkrow:last-of-type { border-bottom: 0; }
+.check-label { margin: 0; font-weight: 600; font-size: 15px; }
+.check-detail { margin: 4px 0 0; font-size: 12.5px; color: var(--ink3); line-height: 1.45; }
+.check-actions { display: flex; flex-direction: column; gap: 6px; }
+.check-actions .btn { padding: 7px 12px; font-size: 13px; white-space: nowrap; }
