@@ -19,6 +19,11 @@ let recorder = null;
 let pending = null;      // { parsed, audioId, blob, ms } waiting for her confirmation
 let onChange = () => {};
 
+/* Which expandable sections are open. Re-rendering rebuilds the markup, which
+   would close them — so tapping one environment chip would collapse the very
+   section she is tapping in, for every tap. Remembered here instead. */
+const openSections = new Set();
+
 /* The one status line, at body level, outside every render target. Writing a
    message into markup that is about to be rebuilt is how it disappears. */
 function say(text) {
@@ -35,6 +40,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export function renderCapture(root) {
   if (!regimen) { root.innerHTML = '<p class="unknown">Loading…</p>'; return; }
   const events = readEvents();
+  const open = (id) => (openSections.has(id) ? ' open' : '');
 
   const mic = !recordingSupported()
     ? '<p class="unknown">This browser cannot record. The buttons below still work.</p>'
@@ -46,7 +52,7 @@ export function renderCapture(root) {
            <span class="mic-icon" aria-hidden="true">●</span> Talk it through
            <span class="mic-sub">Say what you gave him. The recording is always kept.</span></button>`;
 
-  const notes = recent(events, ['note', 'meal', 'water', 'out'], Date.now(), 48);
+  const notes = recent(events, ['note', 'meal', 'water', 'out', 'where', 'weather', 'sleep', 'who', 'mood', 'weight'], Date.now(), 48);
 
   root.innerHTML = `<a class="back" href="#home">&larr; Luke</a>
     <h2>Tell it what happened</h2>
@@ -55,7 +61,7 @@ export function renderCapture(root) {
     ${pendingCard()}
 
     <p class="k">Or tap</p>
-    <div class="chips">
+    <div class="chips quick-adds">
       <button class="chip" type="button" data-obs="meal" data-val="all">Ate it all</button>
       <button class="chip" type="button" data-obs="meal" data-val="half">Ate about half</button>
       <button class="chip" type="button" data-obs="meal" data-val="none">Wouldn't eat</button>
@@ -64,11 +70,29 @@ export function renderCapture(root) {
       <button class="chip" type="button" data-obs="out" data-val="stool">Stool</button>
     </div>
 
+    <details class="why env" id="env-details"${open('env-details')}>
+      <summary>Where he was, and how he seemed</summary>
+      <p class="sync-lead">The third thing that acts on him, after his medicines and his food. Everything here is also understood if you just say it.</p>
+      ${envGroup('where', 'Where', ['home', 'the car', 'out walking', "someone else's house", 'the vet'])}
+      ${envGroup('weather', 'Air', ['hot', 'cold', 'mild', 'wet'])}
+      ${envGroup('sleep', 'Slept', ['well', 'restless', 'up a lot', 'barely'])}
+      ${envGroup('who', 'With', ['just me', 'alone', 'visitors', 'children', 'other dogs'])}
+      ${envGroup('mood', 'Seemed', ['bright', 'quiet', 'clingy', 'anxious', 'content', 'sore'])}
+    </details>
+
+    <details class="why" id="weight-details"${open('weight-details')}>
+      <summary>Weigh him</summary>
+      <p class="sync-lead">His last recorded weight is from 14 September, and it has been used to work out milligrams per kilogram. Worth refreshing.</p>
+      <label class="field"><span>Weight, kg</span>
+        <input id="weight-kg" inputmode="decimal" placeholder="e.g. 34.8"></label>
+      <div class="sheet-actions"><button class="btn primary" type="button" id="weight-save">Record it</button></div>
+    </details>
+
     <p class="k">Recent · ${notes.length} in the last 48 hours</p>
     <div class="entries">${notes.length ? notes.map(noteRow).join('')
       : '<p class="unknown">Nothing yet. Talk to it, or tap something above.</p>'}</div>
 
-    <details class="why">
+    <details class="why" id="import-details"${open('import-details')}>
       <summary>Bring in a log from a file</summary>
       <p class="sync-lead">For getting an existing log onto this device. Nothing is overwritten — entries are added, and anything already here is left alone.</p>
       <input type="file" id="import-file" accept=".json,.ndjson,.txt" aria-label="Log file">
@@ -98,6 +122,11 @@ function pendingCard() {
   </div>`;
 }
 
+function envGroup(type, label, values) {
+  return `<p class="k dim">${label}</p><div class="chips">${values.map((v) =>
+    `<button class="chip" type="button" data-obs="${type}" data-val="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+}
+
 function noteRow(e) {
   const when = new Date(e.atUTC + (e.atOffset || 0) * 60000);
   const hh = String(when.getUTCHours()).padStart(2, '0');
@@ -105,7 +134,10 @@ function noteRow(e) {
   const label = e.type === 'meal' ? `Ate: ${e.value || 'some'}`
     : e.type === 'water' ? `Drank: ${e.value || 'some'}`
     : e.type === 'out' ? (e.value === 'stool' ? 'Stool' : 'Peed')
-    : (e.text || 'Note');
+    : e.type === 'weight' ? `Weighed ${e.value} kg`
+    : ['where', 'weather', 'sleep', 'who', 'mood'].includes(e.type)
+      ? `${({ where: 'Where', weather: 'Air', sleep: 'Slept', who: 'With', mood: 'Seemed' })[e.type]}: ${e.value}`
+      : (e.text || 'Note');
   return `<div class="entry">
     <span class="etime">${hh}:${mm}</span>
     <span>${esc(label)}${e.text && e.type !== 'note' ? ` <span class="unknown">${esc(e.text.slice(0, 80))}</span>` : ''}</span>
@@ -223,7 +255,7 @@ async function doImport(file) {
 
 export function attach() {
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,[data-obs],[data-play]');
+    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,[data-obs],[data-play]');
     if (!t) return;
     if (t.id === 'mic-start')    { startMic(); return; }
     if (t.id === 'mic-stop')     { stopMic(); return; }
@@ -231,6 +263,17 @@ export function attach() {
     if (t.id === 'pending-note') { commitPending(true); return; }
     if (t.id === 'pending-no')   { pending = null; onChange(); say('Proposal discarded. The recording is kept.'); return; }
     if (t.dataset.play)          { play(t.dataset.play); return; }
+    if (t.id === 'weight-save') {
+      const input = document.getElementById('weight-kg');
+      const kg = Number((input && input.value || '').trim());
+      if (!kg || Number.isNaN(kg)) { say('Type a weight in kilograms first.'); return; }
+      let outcome = `Weight recorded: ${kg} kg. Milligrams per kilogram now use this.`;
+      try { logObservation('weight', { value: kg }); }
+      catch (err) { outcome = `NOT SAVED — ${err.message}`; }
+      onChange();
+      say(outcome);
+      return;
+    }
     if (t.dataset.obs) {
       let outcome = 'Logged.';
       try { logObservation(t.dataset.obs, { value: t.dataset.val }); }
@@ -239,6 +282,13 @@ export function attach() {
       say(outcome);
     }
   });
+
+  // Remember which sections she opened, so a re-render does not shut them.
+  document.addEventListener('toggle', (ev) => {
+    const d = ev.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.id) return;
+    if (d.open) openSections.add(d.id); else openSections.delete(d.id);
+  }, true);
 
   document.addEventListener('change', (ev) => {
     if (ev.target && ev.target.id === 'import-file' && ev.target.files && ev.target.files[0]) {

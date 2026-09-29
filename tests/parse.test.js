@@ -105,9 +105,31 @@ test('one sentence can carry doses, food and a time all at once', () => {
 /* ------------------------------------------------ the failure cases matter */
 
 test('a sentence it cannot read produces nothing rather than a guess', () => {
-  const p = parse('he seems a bit off tonight, I don\'t know', regimen);
+  const p = parse('I should call the insurance company back tomorrow', regimen);
   assert.equal(p.doses.length, 0);
+  assert.equal(p.observations.length, 0);
   assert.equal(p.understoodNothing, true, 'and it says so, so the note is kept as a note');
+});
+
+test('"he seems a bit off" is a mood, not nothing', () => {
+  // How he seemed is the third input, after medicines and food, and she is far
+  // more likely to say this than to tap a chip for it.
+  const p = parse("he seems a bit off tonight, I don't know", regimen);
+  assert.equal(p.observations.find((o) => o.type === 'mood').value, 'quiet');
+  assert.equal(p.doses.length, 0, 'and it is still not a dose');
+});
+
+test('where he was, the air, his sleep, who was there, how he seemed', () => {
+  assert.equal(parse('we were at my sister\'s house all day', regimen).observations.find((o) => o.type === 'where').value, "someone else's house");
+  assert.equal(parse('it was really hot out', regimen).observations.find((o) => o.type === 'weather').value, 'hot');
+  assert.equal(parse('he was up a lot last night', regimen).observations.find((o) => o.type === 'sleep').value, 'up a lot');
+  assert.equal(parse('he seemed sore getting up', regimen).observations.find((o) => o.type === 'mood').value, 'sore');
+});
+
+test('a word that only looks like an environment word is not one', () => {
+  // "off" alone would catch this, which is why the mood match is the idiom.
+  const p = parse('I lifted him off the bed', regimen);
+  assert.equal(p.observations.filter((o) => o.type === 'mood').length, 0);
 });
 
 test('trailing off is normal, not an error', () => {
