@@ -669,15 +669,29 @@ export function cycleLength(events, now = Date.now()) {
    representation of time to be seen in about 25.4 hour circles or chunks." */
 export function circles(events, now = Date.now(), count = 7) {
   const span = cycleHours() * HOUR;
-  const wakes = inOrder(liveEvents(events)).filter((e) => e.type === 'wake' && e.atUTC <= now);
-  const anchor = wakes.length ? wakes[wakes.length - 1].atUTC : now;
+  const live = inOrder(liveEvents(events));
+  const wakes = live.filter((e) => e.type === 'wake' && e.atUTC <= now);
+
+  /* A wake mark is the honest anchor: the circle starts when she got up.
+     Without one, anchoring at `now` would put everything logged even a moment
+     ago into the PREVIOUS circle. So fall back to the oldest thing logged
+     within the last circle's length, which keeps recent activity together,
+     and only to `now` when there is nothing at all. */
+  const recentFirst = live.find((e) => e.atUTC > now - span && e.atUTC <= now);
+  const anchor = wakes.length ? wakes[wakes.length - 1].atUTC
+    : (recentFirst ? recentFirst.atUTC : now);
 
   // Walk back from the anchor in whole circles.
   const out = [];
   for (let i = 0; i < count; i++) {
     const start = anchor - i * span;
     const end = start + span;
-    const inside = inOrder(liveEvents(events)).filter((e) => e.atUTC >= start && e.atUTC < Math.min(end, now));
+    // Inclusive of `now`: with no wake logged the current circle begins at
+    // `now`, so a strict `<` made it empty and anything logged immediately
+    // fell out of its own circle.
+    const cap = Math.min(end, now);
+    const inside = inOrder(liveEvents(events))
+      .filter((e) => e.atUTC >= start && (e.atUTC < cap || (e.atUTC === cap && cap === now)));
     out.push({
       index: i, start, end, span,
       current: i === 0,
@@ -845,4 +859,107 @@ export function labGroup(groupKey, events, now = Date.now()) {
   const latest = latestLabs(events, now);
   const found = group.labs.map((k) => labStatus(latest.get(k), now)).filter(Boolean);
   return found.length ? { ...group, values: found } : null;
+}
+
+/* ===========================================================================
+   The things to notice, from her own Watch List.
+
+   Her records already hold a thirty-second daily check, three lumps under
+   watch, and — the most valuable single line anywhere in them —
+
+       "The number of carrots Luke asks for each day is the household's
+        quietest, most reliable signal. A drop in carrot count tends to come
+        hours to days before any other sign he's feeling off."
+
+   A leading indicator, found by the people who live with him, that no drug
+   window or lab value can match. It gets first-class treatment here.
+
+   Check definitions arrive as events so they stay in her private log, sync
+   like everything else, and can be edited without a release.
+   =========================================================================== */
+
+export function checkDefs(events, now = Date.now()) {
+  const defs = new Map();
+  for (const e of inOrder(liveEvents(events))) {
+    if (e.type !== 'checkdef' || e.atUTC > now) continue;
+    defs.set(e.checkKey, e);          // a later definition supersedes an earlier one
+  }
+  return [...defs.values()];
+}
+
+export function lastCheck(events, checkKey, now = Date.now()) {
+  const all = inOrder(liveEvents(events))
+    .filter((e) => e.type === 'check' && e.checkKey === checkKey && e.atUTC <= now);
+  return all.length ? all[all.length - 1] : null;
+}
+
+/* Due by elapsed time, not by calendar: a "daily" check on a 25.4-hour day is
+   due once per circle, and a week is seven of those. */
+export function checksDue(events, now = Date.now()) {
+  const circle = cycleHours() * HOUR;
+  return checkDefs(events, now).map((def) => {
+    const last = lastCheck(events, def.checkKey, now);
+    const period = def.every === 'weekly' ? circle * 7 : circle;
+    const sinceMs = last ? now - last.atUTC : null;
+    return {
+      def, last,
+      due: !last || sinceMs >= period,
+      sinceMs,
+      periodMs: period,
+      changed: last && last.value === 'changed',
+    };
+  });
+}
+
+/* ------------------------------------------------------------ carrot count
+
+   Counted per circle, because that is the unit she lives in. Returns the
+   recent run so a DROP is visible, which is the whole point — the signal is
+   the change, not the number. */
+export function carrotCounts(events, now = Date.now(), howMany = 7) {
+  const ring = circles(events, now, howMany);
+  return ring.map((c) => ({
+    start: c.start,
+    current: c.current,
+    count: c.events
+      .filter((e) => e.type === 'carrots')
+      .reduce((n, e) => n + (Number(e.value) || 0), 0),
+    logged: c.events.some((e) => e.type === 'carrots'),
+  }));
+}
+
+/* A drop against his own recent run. Described, never diagnosed (S7): the app
+   says the number fell and what her own records say that tends to mean, and
+   stops there. */
+export function carrotTrend(events, now = Date.now()) {
+  const counts = carrotCounts(events, now, 7);
+  const past = counts.slice(1).filter((c) => c.logged);
+  const today = counts[0];
+  if (!today || !today.logged || past.length < 3) {
+    return { enough: false, today: today && today.logged ? today.count : null, samples: past.length };
+  }
+  const typical = past.reduce((a, c) => a + c.count, 0) / past.length;
+  return {
+    enough: true,
+    today: today.count,
+    typical,
+    down: today.count < typical - 1,
+    samples: past.length,
+  };
+}
+
+/* A generic append for event kinds that are neither a dose nor an observation
+   — a check, a definition, anything later. Same rules, same shape. */
+export function logEvent(fields, { now = Date.now() } = {}) {
+  const events = readEvents();
+  const e = {
+    id: newId(), seq: nextSeq(events),
+    atUTC: now, atOffset: -new Date(now).getTimezoneOffset(),
+    loggedUTC: now, loggedOffset: -new Date(now).getTimezoneOffset(),
+    source: 'Rikki',
+    ...fields,
+  };
+  events.push(e);
+  writeEvents(events);
+  return e;
 }
