@@ -158,6 +158,29 @@ export function parse(text, regimen, { now = Date.now(), round = 'wake', events 
     result.matched.push('out');
   }
 
+  /* 5. Where he was, and how he seemed. The third input, after medicines and
+        food. Matched on plain words, and never guessed: a sentence with none
+        of these produces none of these. */
+  const ENV = [
+    ['where',   [['home', /\bat home\b/], ['the car', /\b(in the )?car\b/], ['out walking', /\b(walk|walking|outside|out back)\b/],
+                 ["someone else's house", /\b(niece|nephew|sister|brother|mum|mom|friend'?s)\b/], ['the vet', /\bvet'?s?\b/]]],
+    ['weather', [['hot', /\b(hot|warm|heat)\b/], ['cold', /\b(cold|chilly|freezing)\b/], ['wet', /\b(rain|raining|wet|snow)\b/]]],
+    ['sleep',   [['well', /\bslept (well|through|fine)\b/], ['restless', /\b(restless|unsettled|tossing)\b/],
+                 ['up a lot', /\b(up a lot|up all night|up several|kept waking)\b/], ['barely', /\b(barely slept|hardly slept|no sleep)\b/]]],
+    ['who',     [['alone', /\b(alone|by himself|on his own)\b/], ['visitors', /\bvisitors\b|\bhad company\b|\bpeople (over|round|here)\b/],
+                 ['children', /\b(kids|children|niece|nephew)\b/], ['other dogs', /\b(other dogs|another dog)\b/]]],
+    ['mood',    [['bright', /\b(bright|perky|happy|himself)\b/], ['quiet', /\b(quiet|subdued|flat)\b|\bseem(s|ed)? (a bit |a little )?off\b|\bbit off\b/],
+                 ['clingy', /\b(clingy|following me|glued)\b/], ['anxious', /\b(anxious|panting|pacing|restless)\b/],
+                 ['content', /\b(content|settled|comfortable|peaceful)\b/], ['sore', /\b(sore|stiff|limping|struggling)\b/]]],
+  ];
+  for (const [type, options] of ENV) {
+    const hit = options.find(([, re]) => re.test(t));
+    if (hit) {
+      result.observations.push({ type, value: hit[0], text: raw });
+      result.matched.push(type);
+    }
+  }
+
   result.understoodNothing = result.doses.length === 0 && result.observations.length === 0;
   return result;
 }
@@ -177,6 +200,9 @@ export function describe(parsed, regimen) {
     if (o.type === 'meal')  lines.push(`Ate: ${o.value || 'amount not said'}`);
     if (o.type === 'water') lines.push(`Drank: ${o.value || 'amount not said'}`);
     if (o.type === 'out')   lines.push(o.value === 'stool' ? 'Passed a stool' : 'Peed');
+    if (['where', 'weather', 'sleep', 'who', 'mood'].includes(o.type)) {
+      lines.push(`${({ where: 'Where', weather: 'Air', sleep: 'Slept', who: 'With', mood: 'Seemed' })[o.type]}: ${o.value}`);
+    }
   }
   if (parsed.minutesAgo) lines.push(`Given ${parsed.minutesAgo} minutes ago`);
   return lines;

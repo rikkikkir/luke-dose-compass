@@ -580,3 +580,182 @@ export function importEvents(incoming, { now = Date.now() } = {}) {
   }
   return { added: added.length, alreadyHad: usable.length - added.length, skipped, total: readEvents().length };
 }
+
+/* ===========================================================================
+   The config, her circles, and what is still working in him.
+
+   TWO UNITS OF TIME, AND THE APP ALWAYS SAYS WHICH IT IS USING:
+
+     25.4 hours  the day Rikki and Luke actually live in. How time is drawn.
+     24 hours    only for "the label says 2 a day". A drug label's day is not
+                 hers, and collapsing the two produced false over-the-label
+                 warnings before this was separated out.
+
+   Nothing here predicts when she will wake. Her last thirty wake-to-wake
+   spans ran from 14.2 to 59.8 hours; predicting from the mean misses by about
+   nine hours. The 25.4-hour circle is a FRAME, not a forecast.
+   =========================================================================== */
+
+let CONFIG = null;
+
+/* CLAUDE.md: "the app reads default settings from this file" and "change the
+   number in config.defaults.json, never in prose." The file shipped from the
+   first deploy and was never actually read until now. */
+export async function loadConfig(baseURI) {
+  try {
+    const url = new URL('config.defaults.json', baseURI || 'http://localhost/');
+    const res = await fetch(url, { cache: 'no-store' });
+    CONFIG = await res.json();
+  } catch {
+    CONFIG = null;          // every caller passes a fallback
+  }
+  return CONFIG;
+}
+
+export function setConfig(c) { CONFIG = c; }
+
+/* Each entry is { value, source, note }, so the source travels with the number. */
+export function cfg(path, fallback) {
+  if (!CONFIG) return fallback;
+  const entry = path.split('.').reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), CONFIG);
+  if (entry && typeof entry === 'object' && 'value' in entry) return entry.value;
+  return entry === undefined ? fallback : entry;
+}
+
+export function cfgSource(path) {
+  if (!CONFIG) return null;
+  const entry = path.split('.').reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), CONFIG);
+  return entry && entry.source ? { source: entry.source, note: entry.note } : null;
+}
+
+export const cycleHours = () => cfg('cycle.defaultHours', 25.4);
+
+/* --------------------------------------------------- how long her cycles run
+
+   DESCRIPTION ONLY. Never consulted to predict. Returns the spread and the
+   sample count, because a bare mean across spans of 14 to 60 hours would be
+   false precision. */
+export function cycleLength(events, now = Date.now()) {
+  const over = cfg('cycle.averageOverCycles', 7);
+  const wakes = inOrder(liveEvents(events)).filter((e) => e.type === 'wake' && e.atUTC <= now);
+
+  if (wakes.length < 2) {
+    return { hours: cycleHours(), min: null, max: null, samples: 0, estimated: true,
+      note: `No measured cycles yet, so this is the ${cycleHours()} hour figure from settings.` };
+  }
+
+  const spans = [];
+  for (let i = 1; i < wakes.length; i++) spans.push((wakes[i].atUTC - wakes[i - 1].atUTC) / HOUR);
+  const recent = spans.slice(-over);
+  const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+
+  // A span far longer than a plausible cycle is more likely a gap in the data
+  // than a sixty-hour day. Her own Oura archive tracks ring-off periods.
+  const suspect = recent.filter((s) => s > 40).length;
+
+  return {
+    hours: mean, min: Math.min(...recent), max: Math.max(...recent),
+    samples: recent.length, estimated: false, suspect,
+    note: suspect
+      ? `${suspect} of these ${recent.length} spans is longer than any plausible cycle, and is more likely a gap in the data than a real day.`
+      : null,
+  };
+}
+
+/* ------------------------------------------------------------ her circles
+
+   Fixed 25.4-hour chunks, anchored to the most recent wake so the current
+   circle starts when she actually got up. Her words: "I want the
+   representation of time to be seen in about 25.4 hour circles or chunks." */
+export function circles(events, now = Date.now(), count = 7) {
+  const span = cycleHours() * HOUR;
+  const wakes = inOrder(liveEvents(events)).filter((e) => e.type === 'wake' && e.atUTC <= now);
+  const anchor = wakes.length ? wakes[wakes.length - 1].atUTC : now;
+
+  // Walk back from the anchor in whole circles.
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const start = anchor - i * span;
+    const end = start + span;
+    const inside = inOrder(liveEvents(events)).filter((e) => e.atUTC >= start && e.atUTC < Math.min(end, now));
+    out.push({
+      index: i, start, end, span,
+      current: i === 0,
+      events: inside,
+      doses: inside.filter((e) => e.type === 'dose'),
+      meals: inside.filter((e) => e.type === 'meal'),
+      water: inside.filter((e) => e.type === 'water'),
+      notes: inside.filter((e) => e.type === 'note'),
+      anchoredToWake: wakes.length > 0,
+    });
+  }
+  return out;
+}
+
+/* Where she is in the current circle, 0 to 1. Used to place the marker. */
+export function positionInCircle(circle, now = Date.now()) {
+  return Math.max(0, Math.min(1, (now - circle.start) / circle.span));
+}
+
+/* ------------------------------------------- what is still working in him
+
+   Needs no prediction of her at all: a time she logged plus a figure that was
+   published and cited. A drug with no sourced window produces nothing. */
+export function stillWorking(events, regimen, now = Date.now(), aheadHours = 12) {
+  if (!regimen) return [];
+  const out = [];
+
+  for (const drug of regimen.drugs || []) {
+    const w = drug.window;
+    if (!w || w.kind !== 'perDose') continue;
+    const last = lastDose(events, drug.key, now);
+    if (!last) continue;
+
+    const elapsed = now - last.atUTC;
+    const state = effectWindow(drug, elapsed);
+    if (!state || state.phase === 'past') continue;
+
+    const endsFrom = last.atUTC + w.durationHoursFrom * HOUR;
+    const endsTo = last.atUTC + w.durationHoursTo * HOUR;
+    if (endsTo < now) continue;
+    if (endsFrom > now + aheadHours * HOUR) continue;
+
+    out.push({
+      drug, state, last,
+      endsFromMs: Math.max(0, endsFrom - now),
+      endsToMs: Math.max(0, endsTo - now),
+      systems: (drug.acts || []).map((a) => a.system),
+    });
+  }
+
+  return out.sort((a, b) => a.endsFromMs - b.endsFromMs);
+}
+
+/* The sentence that changes her night. Grounded entirely in a dose she logged
+   and a published peak: nothing here guesses when she will sleep, only where
+   the peak falls relative to when she says the sleep round happened. */
+export function sleepDisruption(events, regimen, now = Date.now()) {
+  const drug = (regimen.drugs || []).find((d) => d.key === 'furosemide');
+  if (!drug || !drug.window) return null;
+  const last = lastDose(events, drug.key, now);
+  if (!last) return null;
+
+  // Only meaningful for the sleep-prep dose, so only when a sleep mark is the
+  // most recent round marker or the dose is very recent.
+  const sleepMark = lastOf(events, 'sleep', now);
+  const isSleepRound = sleepMark && Math.abs(sleepMark.atUTC - last.atUTC) < 2 * HOUR;
+  const veryRecent = now - last.atUTC < 3 * HOUR;
+  if (!isSleepRound && !veryRecent) return null;
+
+  const w = drug.window;
+  return {
+    drug,
+    givenAgoMs: now - last.atUTC,
+    peakFromMs: last.atUTC + w.peakHoursFrom * HOUR - now,
+    peakToMs: last.atUTC + w.peakHoursTo * HOUR - now,
+    peakHoursFrom: w.peakHoursFrom,
+    peakHoursTo: w.peakHoursTo,
+    relativeToSleep: isSleepRound ? (last.atUTC - sleepMark.atUTC) : null,
+    vq: 'VQ-18',
+  };
+}

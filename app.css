@@ -448,3 +448,52 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
   border-radius: 10px; padding: 11px 14px;
   font: 500 14px/1.4 var(--body); z-index: 20;
 }
+
+/* ---- circles: time drawn the way they live it ---------------------------- */
+.dial-card { padding: 8px 8px 14px; }
+.dial-card svg { display: block; max-width: 300px; margin: 0 auto; }
+
+.circle-arc { display: flex; flex-direction: column; gap: 7px; }
+.circle-row { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; }
+.circle-label { font: 400 11px var(--mono); color: var(--ink3); }
+.circle-bar { position: relative; height: 22px; background: var(--sunk);
+              border: 1px solid var(--line); border-radius: 6px; }
+.circle-row.current .circle-bar { border-color: var(--accent); }
+/* A circle with no wake mark has a guessed start, and says so by being dashed. */
+.circle-row.unanchored .circle-bar { border-style: dashed; }
+.circle-sum { grid-column: 2; font: 400 11px var(--mono); color: var(--ink3); margin-top: -3px; }
+
+.tick { position: absolute; top: 4px; width: 5px; height: 14px; border-radius: 2px; transform: translateX(-2px); }
+.tick.dose { top: 3px; height: 16px; }
+.tick.meal { background: var(--ok); }
+.tick.water { background: var(--lasix); height: 8px; top: 7px; }
+.tick.wake { background: var(--warn); width: 2px; height: 20px; top: 1px; }
+.tick.sleep { background: var(--ink3); width: 2px; height: 20px; top: 1px; }
+
+/* ---- the vet document ---------------------------------------------------- */
+.vetdoc { white-space: pre-wrap; word-break: break-word;
+          font: 400 12px/1.55 var(--mono); background: var(--sunk);
+          border: 1px solid var(--line); border-radius: 10px;
+          padding: 14px; margin-top: 14px; }
+
+@media print {
+  .no-print, .storagebanner, .toast, #home, .back, footer, #updatebar { display: none !important; }
+  body { background: #fff; color: #000; }
+  .view { display: block !important; }
+  .vetdoc { background: none; border: 0; padding: 0; font-size: 11px; color: #000; }
+}
+
+/* The vet document reads as a document, not as markup. */
+.vetdoc { background: var(--surface); border: 1px solid var(--line);
+          border-radius: 12px; padding: 18px 20px; margin-top: 14px; font-size: 14.5px; }
+.vetdoc h2 { font-size: 19px; margin: 0 0 10px; }
+.vetdoc h3 { font-size: 15px; margin: 22px 0 8px; color: var(--ink);
+             border-top: 1px solid var(--line); padding-top: 14px; }
+.vetdoc h3:first-of-type { border-top: 0; padding-top: 0; }
+.vetdoc p { margin: 0 0 9px; line-height: 1.55; }
+.vetdoc ul { margin: 0 0 10px; padding-left: 20px; }
+.vetdoc li { margin-bottom: 5px; line-height: 1.5; }
+.vetdoc li.cont { list-style: none; margin: -3px 0 7px -20px; padding-left: 20px;
+                  font-size: 12.5px; color: var(--ink3); }
+.vetdoc i { color: var(--ink3); font-style: normal; font-size: 12.5px; }
+.vetdoc hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }

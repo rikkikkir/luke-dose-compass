@@ -10,7 +10,10 @@ import {
   effectWindow, buildupState, bodyState,
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
+  loadConfig, cycleHours, stillWorking, sleepDisruption,
 } from './store.js';
+import { renderCircles } from './circles.js';
+import { renderVetDoc, attachVetDoc } from './vetdoc.js';
 import { hasKey, saveKey, forgetKey, testKey, sync, describeState } from './sync.js';
 import { init as initCapture, attach as attachCapture, renderCapture } from './capture.js';
 
@@ -153,6 +156,35 @@ function systemCard(entry) {
     </details></li>`;
 }
 
+/* What is still working in him. Needs no prediction of her at all: a time she
+   logged, plus a figure that was published and cited. */
+function forecastBlock(events, now) {
+  const running = stillWorking(events, regimen, now, 12);
+  const sleep = sleepDisruption(events, regimen, now);
+
+  const sleepLine = sleep ? `<p class="sys-inter"><b>Furosemide went in ${esc(elapsed(sleep.givenAgoMs))}.</b>
+    The peak is ${sleep.peakHoursFrom}\u2013${sleep.peakHoursTo} hours after a dose, so it lands
+    ${sleep.peakFromMs > 0
+      ? `in about ${esc(elapsed(sleep.peakFromMs).replace(' ago', ''))} to ${esc(elapsed(sleep.peakToMs).replace(' ago', ''))}`
+      : 'around now'}${sleep.relativeToSleep != null ? ' \u2014 which is inside your sleep' : ''}.
+    <span class="tierlabel">From published pharmacology \u00b7 ${esc(sleep.vq)}</span></p>` : '';
+
+  if (!running.length && !sleepLine) return '';
+
+  const rows = running.map((r) => `<li class="sys-drug tier-known">
+      <p class="sys-drug-head"><span class="dot" style="background:var(${r.drug.colour})"></span>
+        <b>${esc(r.drug.name)}</b> <span class="window-state">${r.state.icon} ${esc(r.state.word)}</span></p>
+      <p class="sys-line">Usually fading between ${esc(elapsed(r.endsFromMs).replace(' ago', ''))} and ${esc(elapsed(r.endsToMs).replace(' ago', ''))} from now.</p>
+      <p class="tierlabel">From published pharmacology</p></li>`).join('');
+
+  return `<li class="sys">
+    <h3>What is still working in him</h3>
+    ${sleepLine}
+    ${rows ? `<ul class="drugs">${rows}</ul>` : '<p class="unknown">Nothing with a published window is still inside it.</p>'}
+    <p class="sys-note">These are windows from the doses you logged, not a schedule. Nothing here says when to give the next one.</p>
+  </li>`;
+}
+
 export function renderBody(root, now = Date.now()) {
   if (!regimen) { root.innerHTML = '<p class="unknown">Loading\u2026</p>'; return; }
   const events = readEvents();
@@ -162,6 +194,7 @@ export function renderBody(root, now = Date.now()) {
     <h2>His body, right now</h2>
     <p class="interp">Interpretation, not measurement. Nothing here senses Luke.</p>
     <ul class="systems">${state.map(systemCard).join('')}</ul>
+    ${forecastBlock(events, now)}
     <p class="foot-note">${esc(regimen.interactionsNote || '')}</p>
     <p class="foot-note">This never diagnoses and never recommends a dose. What Luke shows you is better evidence than anything on this screen.</p>`;
 }
@@ -321,8 +354,7 @@ function saveDrugs() {
   try {
     writeLocalRegimen(edited);
     regimen = mergeRegimen(seedRegimen, readLocalRegimen());
-  initCapture(regimen, () => refresh());
-  attachCapture();
+    initCapture(regimen, () => refresh());
     message = 'Saved. Doses already logged keep the numbers that applied then.';
   } catch (err) {
     message = `NOT SAVED \u2014 ${err.message}`;
@@ -475,11 +507,15 @@ export function refresh(now = Date.now()) {
     const drugsEl = document.getElementById('drugs-body');
     const bodyEl = document.getElementById('body-body');
     const capEl = document.getElementById('capture-body');
+    const cirEl = document.getElementById('circles-body');
+    const vetEl = document.getElementById('vet-body');
     if (nowEl) renderNow(nowEl, now);
     if (logEl) renderLog(logEl, now);
     if (drugsEl) renderDrugs(drugsEl);
     if (bodyEl) renderBody(bodyEl, now);
     if (capEl) renderCapture(capEl);
+    if (cirEl) renderCircles(cirEl, regimen, now);
+    if (vetEl) renderVetDoc(vetEl, regimen);
     banner();
   } catch (err) {
     console.warn('render failed', err);   // the crisis card is untouched
@@ -532,9 +568,11 @@ export async function start() {
     seedRegimen = { drugs: [], effects: {} };
   }
   // Her own corrections win over the shipped seed, drug by drug.
+  await loadConfig(document.baseURI);   // CLAUDE.md: numbers live in config.defaults.json
   regimen = mergeRegimen(seedRegimen, readLocalRegimen());
   initCapture(regimen, () => refresh());
   attachCapture();
+  attachVetDoc(() => regimen, say);
   try { navigator.storage?.persist?.(); } catch { /* usually false on iOS; harmless */ }
 
   document.addEventListener('click', (ev) => {

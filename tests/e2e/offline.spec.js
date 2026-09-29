@@ -213,7 +213,7 @@ test('his body shows what is acting where, with certainty on the face of it', as
   await page.locator('[data-give="tramadol"]').click();
 
   await page.goto('/index.html#body');
-  await expect(page.locator('.interp')).toContainText('Interpretation, not measurement');
+  await expect(page.locator('#body .interp')).toContainText('Interpretation, not measurement');
 
   // Furosemide acts on water, tramadol on joints and alertness.
   const water = page.locator('.sys', { hasText: 'Kidneys and water' });
@@ -234,7 +234,7 @@ test('a system with nothing acting on it says so', async ({ page }) => {
 
 test('the body view never claims to measure or to advise', async ({ page }) => {
   await page.goto('/index.html#body');
-  await expect(page.locator('.interp')).toBeVisible();   // regimen has loaded
+  await expect(page.locator('#body .interp')).toBeVisible();   // regimen has loaded
   const text = await page.locator('#body').innerText();
   expect(text).toContain('Interpretation, not measurement');
   expect(text).toContain('never diagnoses and never recommends a dose');
@@ -245,7 +245,7 @@ test('the capture screen offers voice and buttons, and the buttons always work',
   const cap = page.locator('#capture-body');
   // Either a microphone or an honest statement that this browser cannot record.
   await expect(cap.locator('.mic, .unknown').first()).toBeVisible();
-  await expect(cap.locator('[data-obs]')).toHaveCount(6);
+  await expect(cap.locator('.quick-adds [data-obs]')).toHaveCount(6);
 
   await page.locator('[data-obs="meal"][data-val="half"]').click();
   await expect(cap).toContainText('Ate: half');
@@ -272,7 +272,7 @@ test('a log file can be brought in, and importing it twice adds nothing', async 
   };
 
   await page.goto('/index.html#capture');
-  await page.locator('#capture-body details.why summary').click();
+  await page.locator('#import-details summary').click();
   await page.locator('#import-file').setInputFiles(file);
   await expect(page.locator('#toast')).toContainText('Added 2');
 
@@ -285,7 +285,7 @@ test('a log file can be brought in, and importing it twice adds nothing', async 
 test('an imported wake makes the Now screen count from it', async ({ page }) => {
   const now = Date.now();
   await page.goto('/index.html#capture');
-  await page.locator('#capture-body details.why summary').click();
+  await page.locator('#import-details summary').click();
   await page.locator('#import-file').setInputFiles({
     name: 'w.ndjson', mimeType: 'application/x-ndjson',
     buffer: Buffer.from(JSON.stringify({ id: 'oura-wake-y', seq: 1, type: 'wake', atUTC: now - 5 * 3600000, atOffset: -360, loggedUTC: now - 5 * 3600000, loggedOffset: -360, source: 'oura' })),
@@ -293,4 +293,84 @@ test('an imported wake makes the Now screen count from it', async ({ page }) => 
   await expect(page.locator('#toast')).toContainText('Added 1');
   await page.goto('/index.html#now');
   await expect(page.locator('#now')).toContainText('Awake 5h');
+});
+
+test('the circles draw time in 25.4-hour chunks, and refuse a shape too early', async ({ page }) => {
+  await page.goto('/index.html#circles');
+  await expect(page.locator('#circles .interp')).toContainText('25.4-hour circles');
+  await expect(page.locator('#circles-body svg')).toBeVisible();
+  await expect(page.locator('.circle-row')).toHaveCount(8);
+  // With an empty log it must not imply a trend.
+  await expect(page.locator('#circles-body')).toContainText('draws no shape');
+});
+
+test('a dose lands in the right circle', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-mark="wake"]').click();
+  await page.locator('[data-give="furosemide"]').click();
+  await page.goto('/index.html#circles');
+  const current = page.locator('.circle-row.current');
+  await expect(current).toContainText('1 dose');
+  await expect(current.locator('.tick.dose')).toHaveCount(1);
+});
+
+test('an empty circle says nothing was logged, not zero of everything', async ({ page }) => {
+  await page.goto('/index.html#circles');
+  await expect(page.locator('.circle-row').first()).toContainText('nothing logged');
+});
+
+test('the vet document explains what the app refuses to claim', async ({ page }) => {
+  await page.goto('/index.html#vet');
+  const doc = page.locator('.vetdoc');
+  await expect(doc).toBeVisible();
+  await expect(doc).toContainText('not a medical device');
+  await expect(doc).toContainText('What the app refuses to estimate');
+  await expect(doc).toContainText('No minimum gap is enforced');
+  // It must say plainly that it does not predict her cycle.
+  await expect(doc).toContainText('deliberately does not do');
+  // And it must carry sources, because a vet will check them.
+  await expect(doc).toContainText('Merck Veterinary Manual');
+  // Rendered as a document, not as raw markup.
+  await expect(doc.locator('h3').first()).toBeVisible();
+  expect(await doc.innerText()).not.toContain('**');
+});
+
+test('the vet document carries what actually happened', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="tramadol"]').click();
+  await page.goto('/index.html#capture');
+  await page.locator('[data-obs="meal"][data-val="half"]').click();
+  await page.goto('/index.html#vet');
+  await expect(page.locator('.vetdoc')).toContainText('Tramadol');
+  await expect(page.locator('.vetdoc')).toContainText('ate: half');
+});
+
+test('what is still working in him shows after a dose, and never as a schedule', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
+  await page.goto('/index.html#body');
+  const block = page.locator('.sys', { hasText: 'What is still working in him' });
+  await expect(block).toContainText('Furosemide');
+  await expect(block).toContainText('not a schedule');
+  await expect(block).toContainText('Nothing here says when to give the next one');
+});
+
+test('where he was and how he seemed reach the log', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('#env-details summary').click();
+  await page.locator('[data-obs="mood"][data-val="sore"]').click();
+  await expect(page.locator('#capture-body')).toContainText('Seemed: sore');
+  await page.locator('[data-obs="where"][data-val="the car"]').click();
+  await expect(page.locator('#capture-body')).toContainText('Where: the car');
+});
+
+test('his weight can be refreshed, and a blank is refused', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('#weight-details summary').click();
+  await page.locator('#weight-save').click();
+  await expect(page.locator('#toast')).toContainText('Type a weight');
+  await page.fill('#weight-kg', '34.8');
+  await page.locator('#weight-save').click();
+  await expect(page.locator('#toast')).toContainText('34.8 kg');
+  await expect(page.locator('#capture-body')).toContainText('Weighed 34.8 kg');
 });
