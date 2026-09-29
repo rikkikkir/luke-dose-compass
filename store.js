@@ -258,16 +258,17 @@ export function checkAgainstMax(drug, events, { tablets, now = Date.now() } = {}
   return passed.length ? passed : null;
 }
 
-/* ------------------------------------------------------- furosemide window */
+/* --------------------------------------------------------- effect windows */
 
-/* The only drug where every number is real, so the only drug the app says
-   anything about. Always a range, always with the variability named: oral
-   absorption in dogs runs from 10% to 100%. */
-export function furosemideWindow(elapsedMs, effects) {
-  if (elapsedMs == null || !effects) return null;
+/* One function for every drug, driven by regimen.json, rather than a function
+   per drug. A drug with no sourced window returns null and the screen shows
+   nothing — never a guess dressed as a window. */
+export function effectWindow(drug, elapsedMs) {
+  const w = drug && drug.window;
+  if (!w || w.kind !== 'perDose' || elapsedMs == null) return null;
   const mins = elapsedMs / 60000;
   const { onsetMinFrom, onsetMinTo, peakHoursFrom, peakHoursTo,
-          durationHoursFrom, durationHoursTo } = effects;
+          durationHoursFrom, durationHoursTo } = w;
 
   if (mins < onsetMinFrom) {
     return { phase: 'starting', icon: '·', word: 'Just given',
@@ -278,15 +279,88 @@ export function furosemideWindow(elapsedMs, effects) {
       line: `Strongest effect is likely ${peakHoursFrom}–${peakHoursTo} hours after the dose.` };
   }
   if (mins <= peakHoursTo * 60) {
-    return { phase: 'peak', icon: '●', word: 'Likely needs out',
-      line: 'This is the window where he most likely needs to go outside.' };
+    return { phase: 'peak', icon: '●', word: 'Strongest now',
+      line: 'This is the window where the effect is likely at its strongest.' };
   }
   if (mins <= durationHoursTo * 60) {
     return { phase: 'easing', icon: '◐', word: 'Easing',
-      line: `Usually settling by around ${durationHoursFrom}–${durationHoursTo} hours after the dose.` };
+      line: `Usually fading by around ${durationHoursFrom}–${durationHoursTo} hours after the dose.` };
   }
-  return { phase: 'past', icon: '✓', word: 'Likely settled',
+  return { phase: 'past', icon: '✓', word: 'Likely past',
     line: `Past the usual ${durationHoursFrom}–${durationHoursTo} hour window.` };
+}
+
+/* Amantadine and Cosequin do not act per dose. They build, and the honest
+   thing to show is how far into that build he is. */
+export function buildupState(drug, events, now = Date.now()) {
+  const w = drug && drug.window;
+  if (!w || w.kind !== 'buildsOverDays') return null;
+  const doses = inOrder(liveEvents(events)).filter(
+    (e) => e.type === 'dose' && e.drugKey === drug.key && e.atUTC <= now
+  );
+  if (!doses.length) return { phase: 'none', icon: '·', word: 'Not logged yet', line: '' };
+
+  const days = (now - doses[0].atUTC) / (24 * HOUR);
+  const { daysToEffectFrom, daysToEffectTo } = w;
+  const dayNumber = Math.floor(days) + 1;
+  if (days < daysToEffectFrom) {
+    return { phase: 'building', icon: '○', word: 'Still building', days,
+      line: `Takes ${daysToEffectFrom}–${daysToEffectTo} days of daily dosing before any benefit shows. This is day ${dayNumber}.`,
+      note: 'The log only knows what it was told, so this counts from the first dose recorded here, not from when he actually started.' };
+  }
+  return { phase: 'established', icon: '●', word: 'Established', days,
+    line: `Past the ${daysToEffectFrom}–${daysToEffectTo} days it usually takes to build. This is day ${dayNumber}.` };
+}
+
+/* --------------------------------------------------------- the body view */
+
+/* What is acting on each part of him right now. Everything returned carries a
+   tier: known (published and cited), logged (her own record), or extrapolated.
+   A system with nothing acting on it says so rather than looking calm. */
+export function bodyState(events, regimen, now = Date.now()) {
+  if (!regimen || !regimen.systems) return [];
+
+  return regimen.systems.map((system) => {
+    const acting = [];
+
+    for (const drug of regimen.drugs || []) {
+      const act = (drug.acts || []).find((a) => a.system === system.key);
+      if (!act) continue;
+
+      const last = lastDose(events, drug.key, now);
+      const build = buildupState(drug, events, now);
+
+      if (build) {
+        if (build.phase !== 'none') {
+          acting.push({ drug, act, state: build, kind: 'builds', tier: act.tier, last });
+        }
+        continue;
+      }
+      if (!last) continue;
+
+      const state = effectWindow(drug, now - last.atUTC);
+      if (state) acting.push({ drug, act, state, kind: 'window', tier: act.tier, last });
+      else acting.push({ drug, act, state: null, kind: 'logged-only', tier: act.tier, last });
+    }
+
+    const interactions = (regimen.interactions || []).filter(
+      (i) => (i.systems || []).includes(system.key)
+             && i.between.every((k) => (regimen.drugs || []).some((d) => d.key === k))
+    );
+
+    /* A caveat belongs to a system when it says so, or when its drug is acting
+       here. This is how a real fact about amantadine and kidneys reaches the
+       water system without being dressed up as an interaction between two
+       drugs, which it is not. */
+    const caveats = (regimen.drugs || []).flatMap((drug) => {
+      const actsHere = acting.some((a) => a.drug.key === drug.key);
+      return (drug.caveats || [])
+        .filter((c) => (c.systems ? c.systems.includes(system.key) : actsHere))
+        .map((c) => ({ ...c, drug: drug.name }));
+    });
+
+    return { system, acting, interactions, caveats };
+  });
 }
 
 /* ------------------------------------------------------------------ writes */

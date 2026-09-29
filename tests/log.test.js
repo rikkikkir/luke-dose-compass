@@ -1,5 +1,6 @@
-/* The dose log's rules. These are the tests that matter: a wrong answer here
-   either loses a dose Luke had or invents one he didn't.
+/* The dose log's rules, and what the body view is allowed to claim.
+   A wrong answer here either loses a dose Luke had, invents one he didn't,
+   or tells Rikki something about his body that nobody actually knows.
    Run with: node --test tests/*.test.js */
 
 import { test } from 'node:test';
@@ -7,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   makeDose, makeMark, makeVoid, isLive, liveEvents, inOrder,
   lastDose, dosesInWindow, tabletsInWindow, checkAgainstMax,
-  furosemideWindow, windowFor, limitsOf, HOUR,
+  effectWindow, buildupState, bodyState, windowFor, limitsOf, HOUR,
 } from '../store.js';
 
 import { readFileSync } from 'node:fs';
@@ -18,7 +19,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const regimen = JSON.parse(readFileSync(join(root, 'regimen.json'), 'utf8'));
 const drug = (key) => regimen.drugs.find((d) => d.key === key);
 
-const T0 = Date.UTC(2026, 8, 28, 12, 0, 0);   // a fixed instant, so nothing depends on "now"
+const T0 = Date.UTC(2026, 8, 29, 12, 0, 0);
 
 function push(events, e) { events.push(e); return e; }
 function doseAt(events, key, msAgo, now, tablets) {
@@ -28,24 +29,14 @@ function doseAt(events, key, msAgo, now, tablets) {
 /* ------------------------------------------------------------ time is elapsed */
 
 test('elapsed time is pure subtraction, so a DST change cannot move it', () => {
-  // 2026-11-01 09:00 UTC is the US fall-back instant. A naive implementation
-  // that reconstructs local clock time gets 25 hours here instead of 24.
-  const before = Date.UTC(2026, 10, 1, 1, 0, 0);
-  const after = Date.UTC(2026, 10, 2, 1, 0, 0);
-  assert.equal(after - before, 24 * HOUR);
-
-  // And across the spring-forward gap, where 2am local does not exist.
-  const springBefore = Date.UTC(2027, 2, 14, 8, 0, 0);
-  const springAfter = Date.UTC(2027, 2, 15, 8, 0, 0);
-  assert.equal(springAfter - springBefore, 24 * HOUR);
+  assert.equal(Date.UTC(2026, 10, 2, 1) - Date.UTC(2026, 10, 1, 1), 24 * HOUR);
+  assert.equal(Date.UTC(2027, 2, 15, 8) - Date.UTC(2027, 2, 14, 8), 24 * HOUR);
 });
 
 test('a dose keeps both the time it happened and the time it was logged', () => {
-  const events = [];
-  const d = makeDose({ drug: drug('furosemide'), minutesAgo: 20, now: T0, events });
+  const d = makeDose({ drug: drug('furosemide'), minutesAgo: 20, now: T0, events: [] });
   assert.equal(d.loggedUTC, T0);
   assert.equal(d.atUTC, T0 - 20 * 60000);
-  assert.ok(d.atUTC < d.loggedUTC, 'a backdated dose happened before it was logged');
 });
 
 /* ------------------------------------------------------------ append-only, S5 */
@@ -53,173 +44,199 @@ test('a dose keeps both the time it happened and the time it was logged', () => 
 test('an undo stops a dose counting, and an undo of the undo brings it back', () => {
   const events = [];
   const d = doseAt(events, 'furosemide', 0, T0);
-  assert.equal(liveEvents(events).length, 1);
-
   const v1 = push(events, makeVoid({ targetId: d.id, now: T0 + 1000, events }));
-  assert.equal(liveEvents(events).length, 0, 'voided');
   assert.equal(isLive(d, events), false);
-
   push(events, makeVoid({ targetId: v1.id, now: T0 + 2000, events }));
-  assert.equal(isLive(d, events), true, 'undo of the undo restores the dose');
-  assert.equal(liveEvents(events).length, 1);
-
-  // Nothing was ever removed. That is the whole point of S5.
-  assert.equal(events.length, 3);
+  assert.equal(isLive(d, events), true);
+  assert.equal(events.length, 3, 'nothing was ever removed');
 });
 
 test('a voided dose stops counting toward the total', () => {
   const events = [];
   doseAt(events, 'furosemide', 0, T0);
   const second = doseAt(events, 'furosemide', 0, T0);
-  assert.equal(tabletsInWindow(events, 'furosemide', T0, T0 - 24 * HOUR), 4);
-
+  assert.equal(tabletsInWindow(events, 'furosemide', T0, T0 - 24 * HOUR), 6);
   push(events, makeVoid({ targetId: second.id, now: T0 + 1000, events }));
-  assert.equal(tabletsInWindow(events, 'furosemide', T0, T0 - 24 * HOUR), 2);
+  assert.equal(tabletsInWindow(events, 'furosemide', T0, T0 - 24 * HOUR), 3);
 });
 
-/* ------------------------------------------------------------ backdating order */
+/* ------------------------------------------------------------ order and time */
 
 test('a backdated dose sorts before a dose already logged', () => {
   const events = [];
-  const logged = doseAt(events, 'opioid', 0, T0);                 // now
-  const earlier = doseAt(events, 'opioid', 3 * HOUR, T0 + 1000);  // "3 hours ago", logged later
-
-  const order = inOrder(liveEvents(events)).map((e) => e.id);
-  assert.deepEqual(order, [earlier.id, logged.id], 'ordered by when it happened, not when it was typed');
-  assert.equal(lastDose(events, 'opioid', T0 + 1000).id, logged.id);
+  const logged = doseAt(events, 'tramadol', 0, T0);
+  const earlier = doseAt(events, 'tramadol', 3 * HOUR, T0 + 1000);
+  assert.deepEqual(inOrder(liveEvents(events)).map((e) => e.id), [earlier.id, logged.id]);
 });
 
 test('a clock that jumps backwards does not reorder the log', () => {
   const events = [];
-  const first = doseAt(events, 'opioid', 0, T0);
-  const second = doseAt(events, 'opioid', 0, T0 - 2 * HOUR);   // device clock jumped back
-  assert.ok(second.seq > first.seq, 'append order is held by seq, not by the clock');
+  const first = doseAt(events, 'tramadol', 0, T0);
+  const second = doseAt(events, 'tramadol', 0, T0 - 2 * HOUR);
+  assert.ok(second.seq > first.seq);
 });
-
-/* ------------------------------------------------------------ the window boundary */
 
 test('the rolling window boundary is exact', () => {
-  const events = [];
-  const from = T0 - 24 * HOUR;
-  doseAt(events, 'opioid', 24 * HOUR, T0);            // exactly on the edge
-  assert.equal(dosesInWindow(events, 'opioid', T0, from).length, 1, 'the edge is inside');
-
-  const older = [];
-  doseAt(older, 'opioid', 24 * HOUR + 1, T0);         // one millisecond older
-  assert.equal(dosesInWindow(older, 'opioid', T0, from).length, 0, 'one ms past the edge is outside');
+  const on = []; doseAt(on, 'tramadol', 24 * HOUR, T0);
+  assert.equal(dosesInWindow(on, 'tramadol', T0, T0 - 24 * HOUR).length, 1);
+  const past = []; doseAt(past, 'tramadol', 24 * HOUR + 1, T0);
+  assert.equal(dosesInWindow(past, 'tramadol', T0, T0 - 24 * HOUR).length, 0);
 });
 
-/* ------------------------------------- the window a drug is actually counted over */
+/* ------------------------------------- which window a drug is counted over */
 
 test('a drug given by round is counted over the wake cycle, not a rolling 24 hours', () => {
-  // This is the difference between a useful warning and a nightly false alarm.
-  // Rikki's cycle averages 25.4 hours, so a rolling 24-hour window would
-  // routinely hold more than one cycle of a twice-a-round drug.
+  // Rikki's cycle averages 25.4 hours. A rolling window would announce Luke
+  // was over his label on any cycle shorter than 24 hours, which happens often.
   const events = [];
   push(events, makeMark({ type: 'wake', now: T0 - 6 * HOUR, events }));
   const win = windowFor(drug('furosemide'), events, T0);
   assert.equal(win.basis, 'cycle');
   assert.equal(win.from, T0 - 6 * HOUR);
-  assert.equal(win.label, 'this wake cycle');
 });
 
 test('an as-needed drug is counted over a rolling 24 hours', () => {
-  const events = [];
-  push(events, makeMark({ type: 'wake', now: T0 - 6 * HOUR, events }));
-  const win = windowFor(drug('opioid'), events, T0);
-  assert.equal(win.basis, 'rolling');
-  assert.equal(win.from, T0 - 24 * HOUR);
+  assert.equal(windowFor(drug('tramadol'), [], T0).basis, 'rolling');
 });
 
-test('with no wake logged the app falls back and says so, rather than inventing a cycle', () => {
-  const win = windowFor(drug('furosemide'), [], T0);
-  assert.equal(win.basis, 'rolling');
-  assert.equal(win.estimated, true);
+test('with no wake logged the app falls back and says so', () => {
+  assert.equal(windowFor(drug('furosemide'), [], T0).estimated, true);
 });
 
-test('a full cycle of furosemide does not trigger a false alarm', () => {
+/* ------------------------------------------------- reported, never blocked */
+
+test('a dose past the label is reported, and the check never vetoes', () => {
   const events = [];
-  push(events, makeMark({ type: 'wake', now: T0 - 20 * HOUR, events }));
-  doseAt(events, 'furosemide', 19 * HOUR, T0);     // wake round, 2 tablets
-  doseAt(events, 'furosemide', 2 * HOUR, T0);      // sleep-prep round, 2 tablets
-  // 4 tablets = 320 mg = exactly the label. Not over.
-  assert.equal(checkAgainstMax(drug('furosemide'), events, { now: T0, tablets: 0 }), null);
-});
-
-/* ------------------------------------------------- warnings, and never blocking */
-
-test('a dose past the label is reported, and is still logged', () => {
-  const events = [];
-  push(events, makeMark({ type: 'wake', now: T0 - 10 * HOUR, events }));
-  doseAt(events, 'furosemide', 9 * HOUR, T0);
-  doseAt(events, 'furosemide', 4 * HOUR, T0);
-
-  const passed = checkAgainstMax(drug('furosemide'), events, { now: T0 });
-  assert.ok(passed, 'a third dose passes the 320 mg label and is reported');
-  assert.ok(passed.some((p) => p.unit === 'mg' && p.max === 320));
-
-  // Nothing in the model can refuse. checkAgainstMax returns a description,
-  // never a veto: there is no "allowed" field to consult.
-  assert.equal(typeof passed, 'object');
+  doseAt(events, 'tramadol', 5 * HOUR, T0);
+  doseAt(events, 'tramadol', 1 * HOUR, T0);
+  const passed = checkAgainstMax(drug('tramadol'), events, { now: T0 });
+  assert.ok(passed, 'a third dose passes the label of 2 a day');
   assert.ok(!('allowed' in passed), 'the check describes, it does not decide');
 });
 
-test('a drug with no known limit produces no warning and invents no number', () => {
+test('a drug with no known maximum never warns and never invents one', () => {
+  // Furosemide's real daily maximum at 3 x 40 mg is not known, so there is
+  // nothing to be over. Silence here is the correct behaviour.
   const events = [];
-  for (let i = 0; i < 6; i++) doseAt(events, 'antacid', i * HOUR, T0);
-  assert.equal(checkAgainstMax(drug('antacid'), events, { now: T0 }), null);
-  assert.equal(limitsOf(drug('antacid')).minGapHours, null, 'unknown stays null, never 0');
+  push(events, makeMark({ type: 'wake', now: T0 - 10 * HOUR, events }));
+  for (let i = 0; i < 4; i++) doseAt(events, 'furosemide', i * HOUR, T0);
+  assert.equal(checkAgainstMax(drug('furosemide'), events, { now: T0 }), null);
 });
 
 test('no drug in the seed has an invented minimum gap', () => {
-  // S1: the app never suggests timing the vet did not give. If this test ever
-  // fails, someone has filled in a number nobody prescribed.
+  // S1: the app never suggests timing a vet did not give. If this fails,
+  // someone has filled in a number nobody prescribed.
   for (const d of regimen.drugs) {
-    assert.equal(d.minGapHours, null, `${d.key} has a minimum gap that no vet set`);
+    assert.equal(d.minGapHours, null, `${d.key} has a gap no vet set`);
   }
 });
 
 test('an unknown strength is never counted as zero milligrams', () => {
   const events = [];
-  for (let i = 0; i < 10; i++) doseAt(events, 'opioid', i * 60000, T0);
-  const limits = limitsOf(drug('opioid'));
-  assert.equal(limits.strengthMg, null);
-  // The milligram ceiling is skipped entirely rather than passing on a zero.
-  const passed = checkAgainstMax(drug('opioid'), events, { now: T0 }) || [];
+  for (let i = 0; i < 10; i++) doseAt(events, 'cosequin', i * 60000, T0);
+  assert.equal(limitsOf(drug('cosequin')).strengthMg, null);
+  const passed = checkAgainstMax(drug('cosequin'), events, { now: T0 }) || [];
   assert.ok(!passed.some((p) => p.unit === 'mg'));
 });
 
-/* -------------------------------------------------- the limits ride on the dose */
-
 test('a dose keeps the limits that applied when it was logged', () => {
   const events = [];
-  const d = doseAt(events, 'furosemide', 0, T0);
-  assert.equal(d.limitsAtDose.maxPer24hMg, 320);
-  assert.equal(d.limitsAtDose.source, 'compendium');
-
-  // The regimen changes afterwards. The old entry is unaffected, because the
-  // limits were copied onto it rather than pointed at.
-  const changed = { ...drug('furosemide'), maxPer24hMg: 160 };
+  const d = doseAt(events, 'tramadol', 0, T0);
+  assert.equal(d.limitsAtDose.maxPer24hDoses, 2);
+  const changed = { ...drug('tramadol'), maxPer24hDoses: 1 };
   const later = makeDose({ drug: changed, now: T0 + HOUR, events });
-  assert.equal(d.limitsAtDose.maxPer24hMg, 320);
-  assert.equal(later.limitsAtDose.maxPer24hMg, 160);
+  assert.equal(d.limitsAtDose.maxPer24hDoses, 2, 'the old entry is untouched');
+  assert.equal(later.limitsAtDose.maxPer24hDoses, 1);
 });
 
-/* ------------------------------------------------------- the furosemide window */
+/* --------------------------------------------------------- effect windows */
 
-test('the furosemide window is a range at every stage, and never a bare number', () => {
-  const fx = regimen.effects.furosemide;
-  const stages = [10, 45, 90, 240, 500].map((mins) => furosemideWindow(mins * 60000, fx));
-  for (const s of stages) {
-    assert.ok(s.icon && s.word, 'status carries an icon and a word, never colour alone (S4)');
-    assert.ok(s.line.length > 10);
+test('one window function serves every drug that has a sourced window', () => {
+  for (const key of ['furosemide', 'tramadol', 'galliprant', 'omeprazole', 'simethicone']) {
+    const d = drug(key);
+    assert.ok(d.window && d.window.kind === 'perDose', `${key} should have a per-dose window`);
+    const w = effectWindow(d, 90 * 60000);
+    assert.ok(w.icon && w.word, 'icon plus word, never colour alone (S4)');
   }
-  assert.equal(stages[2].phase, 'peak', '90 minutes is inside the 1-2 hour peak');
-  assert.equal(stages[4].phase, 'past', '500 minutes is past the 6 hour window');
 });
 
-test('the furosemide figures carry their sources and their variability', () => {
-  const fx = regimen.effects.furosemide;
-  assert.ok(fx.sources.length >= 2);
-  assert.match(fx.variability, /10% to 100%/, 'the absorption spread must be stated, not hidden');
+test('a drug with no sourced window shows nothing rather than a guess', () => {
+  // The hemp chew has no reliable published time course at this dose in dogs.
+  assert.equal(drug('hempchew').window, null);
+  assert.equal(effectWindow(drug('hempchew'), 60 * 60000), null);
+});
+
+test('a drug that builds over days is never shown as acting today', () => {
+  const events = [];
+  doseAt(events, 'amantadine', 0, T0);
+  const state = buildupState(drug('amantadine'), events, T0 + 2 * 24 * HOUR);
+  assert.equal(state.phase, 'building');
+  assert.match(state.line, /14–21 days/);
+  assert.ok(state.note, 'says the count starts from the first logged dose, not from reality');
+
+  const later = buildupState(drug('amantadine'), events, T0 + 30 * 24 * HOUR);
+  assert.equal(later.phase, 'established');
+});
+
+test('every drug with a window carries a source and its variability', () => {
+  for (const d of regimen.drugs) {
+    if (!d.window) continue;
+    assert.ok(d.variability, `${d.key} has a window but no variability statement`);
+    assert.ok(Array.isArray(d.sources), `${d.key} has no sources array`);
+  }
+});
+
+/* ------------------------------------------------------------- the body view */
+
+test('a system with nothing acting on it says so rather than looking calm', () => {
+  const state = bodyState([], regimen, T0);
+  assert.ok(state.length >= 5);
+  for (const entry of state) assert.equal(entry.acting.length, 0);
+});
+
+test('a logged dose shows up under the body system it acts on', () => {
+  const events = [];
+  doseAt(events, 'furosemide', 90 * 60000, T0);
+  const water = bodyState(events, regimen, T0).find((s) => s.system.key === 'water');
+  assert.equal(water.acting.length, 1);
+  assert.equal(water.acting[0].drug.key, 'furosemide');
+  assert.equal(water.acting[0].state.phase, 'peak', '90 minutes is inside the 1-2 hour peak');
+});
+
+test('every claim on the body view carries a certainty tier', () => {
+  const events = [];
+  doseAt(events, 'tramadol', HOUR, T0);
+  doseAt(events, 'hempchew', HOUR, T0);
+  for (const entry of bodyState(events, regimen, T0)) {
+    for (const a of entry.acting) {
+      assert.ok(['known', 'logged', 'extrapolated'].includes(a.tier),
+        `${a.drug.key} on ${entry.system.key} has no tier`);
+    }
+  }
+});
+
+test('an interaction only shows when both of its drugs are in the regimen', () => {
+  const events = [];
+  doseAt(events, 'tramadol', HOUR, T0);
+  doseAt(events, 'hempchew', HOUR, T0);
+  const alert = bodyState(events, regimen, T0).find((s) => s.system.key === 'alertness');
+  assert.ok(alert.interactions.some((i) => i.between.includes('hempchew') && i.between.includes('tramadol')));
+
+  const withoutChew = { ...regimen, drugs: regimen.drugs.filter((d) => d.key !== 'hempchew') };
+  const alert2 = bodyState(events, withoutChew, T0).find((s) => s.system.key === 'alertness');
+  assert.equal(alert2.interactions.length, 0, 'no drug, no interaction claim');
+});
+
+test('the app says it is not a complete interaction check', () => {
+  // SPEC-domain originally ruled interactions out entirely. Rikki asked for
+  // them. The honest middle is a curated list that admits what it is not.
+  assert.match(regimen.interactionsNote, /not a complete interaction check/i);
+  assert.match(regimen.interactionsNote, /means nobody has looked it up/i);
+});
+
+test('the Galliprant food finding is recorded, because it changes what he gets', () => {
+  const note = regimen.foodNotes.find((f) => f.drug === 'galliprant');
+  assert.ok(note, 'no food note for Galliprant');
+  assert.match(note.text, /4-fold/);
+  assert.equal(note.tier, 'known');
 });

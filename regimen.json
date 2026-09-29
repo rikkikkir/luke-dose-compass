@@ -1,24 +1,213 @@
 {
-  "schema": 1,
-  "seededFrom": "docs/LUKE-SNAPSHOT-2026-09-14.md",
-  "seededOn": "2026-09-28",
-  "note": "The seed only. Rikki's own edits live on her device and win over this file. Every number here carries where it came from. A drug with unknown values is logged, never estimated.",
+  "schema": 2,
+  "seededFrom": "Rikki, 2026-09-29, reading the bottles",
+  "seededOn": "2026-09-29",
+  "note": "The seed only. Rikki's edits live on her device and win. Every number carries where it came from and how certain it is. A drug with no sourced window shows nothing rather than a guess.",
+  "_tiers": {
+    "known": "published pharmacology, cited below",
+    "logged": "when it was actually given, from her own log",
+    "extrapolated": "how it likely feels, interactions, and his individual absorption"
+  },
+  "systems": [
+    {
+      "key": "water",
+      "name": "Kidneys and water",
+      "note": "Urination, thirst, hydration. Luke's creatinine 2.5, SDMA 19 and BUN 87 widen every estimate here."
+    },
+    {
+      "key": "gut",
+      "name": "Stomach and gut",
+      "note": "Acid, gas, nausea, appetite."
+    },
+    {
+      "key": "joints",
+      "name": "Hips and hind legs",
+      "note": "Where his observed signs are: rises slowly, right hind gives out, guards the right hip."
+    },
+    {
+      "key": "alertness",
+      "name": "Alertness",
+      "note": "Sedation, brightness, mood."
+    },
+    {
+      "key": "breathing",
+      "name": "Breathing",
+      "note": "Resting rate. Normal 15 to 30 a minute."
+    }
+  ],
   "drugs": [
     {
       "key": "furosemide",
       "name": "Furosemide",
       "alsoCalled": "Lasix",
       "colour": "--lasix",
-      "strengthMg": 80,
-      "tabletsPerDose": 2,
-      "rounds": ["wake", "sleep"],
-      "maxPerDoseTablets": 2,
-      "maxPer24hMg": 320,
+      "strengthMg": 40,
+      "tabletsPerDose": 3,
+      "rounds": [
+        "wake",
+        "sleep"
+      ],
+      "maxPerDoseTablets": null,
+      "maxPer24hMg": null,
       "minGapHours": null,
-      "withFood": null,
-      "source": "compendium",
-      "modelled": true,
-      "unknowns": ["minimum gap", "with or without food", "reason prescribed (VQ-5)"]
+      "source": "Rikki",
+      "acts": [
+        {
+          "system": "water",
+          "effect": "Pulls fluid out through the kidneys. He will need to go outside, and he will be thirsty.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "perDose",
+        "onsetMinFrom": 30,
+        "onsetMinTo": 60,
+        "peakHoursFrom": 1,
+        "peakHoursTo": 2,
+        "durationHoursFrom": 4,
+        "durationHoursTo": 6
+      },
+      "variability": "Oral absorption in dogs varies from 10% to 100%, so the effect in any one dog is hard to predict. Every time here is a rough window, not a schedule.",
+      "caveats": [
+        {
+          "text": "Fluid loss raises BUN and creatinine. His BUN of 87 against a creatinine of 2.5 is the pattern seen with dehydration, a high-protein meal, or bleeding in the gut. VQ-7.",
+          "tier": "known",
+          "systems": [
+            "water"
+          ]
+        }
+      ],
+      "sources": [
+        "Merck Veterinary Manual, Diuretics for Use in Animals",
+        "BMC Veterinary Research (2021), furosemide in healthy beagles: mean diuresis 5.72 h, back to baseline by 6 h"
+      ],
+      "unknowns": [
+        "minimum gap",
+        "what it is treating (VQ-5)",
+        "the daily maximum for this strength"
+      ]
+    },
+    {
+      "key": "tramadol",
+      "name": "Tramadol",
+      "colour": "--opi",
+      "strengthMg": 50,
+      "tabletsPerDose": 1,
+      "rounds": [],
+      "asNeeded": true,
+      "maxPerDoseTablets": 2,
+      "maxPer24hDoses": 2,
+      "minGapHours": null,
+      "source": "Rikki",
+      "vq": "VQ-3",
+      "acts": [
+        {
+          "system": "joints",
+          "effect": "Dampens pain signals.",
+          "tier": "known"
+        },
+        {
+          "system": "alertness",
+          "effect": "Can make him drowsy or pant.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "perDose",
+        "onsetMinFrom": 30,
+        "onsetMinTo": 60,
+        "peakHoursFrom": 1,
+        "peakHoursTo": 2,
+        "durationHoursFrom": 4,
+        "durationHoursTo": 6
+      },
+      "variability": "How much tramadol helps any individual dog is genuinely uncertain, for the reason below.",
+      "caveats": [
+        {
+          "text": "Dogs largely produce the INACTIVE metabolite of tramadol rather than the active one, which is why its benefit in dogs is debated. It may be doing less than the dose suggests.",
+          "tier": "known",
+          "systems": [
+            "joints"
+          ]
+        },
+        {
+          "text": "Published dosing is every 8 to 12 hours, with 6 hours the shortest interval any source allows. No vet has set a minimum gap for Luke (VQ-3), so the app does not enforce one.",
+          "tier": "known"
+        },
+        {
+          "text": "Luke's 50 mg is about 1.4 mg/kg at his last recorded weight. Published ranges are roughly 2 to 5 mg/kg, so his dose sits at or below the bottom of the range. His weight is from 14 Sep and he has been off his food since.",
+          "tier": "known"
+        }
+      ],
+      "sources": [
+        "Plumb's-style consensus ranges as summarised by VIN, GoodRx and SingleCare, 2026",
+        "Clinical pharmacology of tramadol and tapentadol in dogs and cats, PMC8520146"
+      ],
+      "unknowns": [
+        "minimum gap set by a vet (VQ-3)",
+        "current weight, which changes mg/kg"
+      ]
+    },
+    {
+      "key": "galliprant",
+      "name": "Galliprant",
+      "alsoCalled": "grapiprant",
+      "colour": "--nsaid",
+      "strengthMg": 60,
+      "tabletsPerDose": 1,
+      "rounds": [
+        "wake"
+      ],
+      "maxPer24hDoses": 1,
+      "minGapHours": null,
+      "source": "Rikki",
+      "vq": "VQ-1",
+      "acts": [
+        {
+          "system": "joints",
+          "effect": "Blocks one specific inflammation signal (the EP4 receptor) rather than blocking prostaglandins broadly.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "perDose",
+        "onsetMinFrom": 30,
+        "onsetMinTo": 120,
+        "peakHoursFrom": 2,
+        "peakHoursTo": 2,
+        "durationHoursFrom": 9,
+        "durationHoursTo": 12
+      },
+      "variability": "Half-life is 4.6 to 5.7 hours but it is dosed once daily, so blood levels are low for a large part of each cycle. The duration shown is roughly two half-lives, not a full day.",
+      "caveats": [
+        {
+          "text": "GIVEN WITH FOOD, absorption drops sharply: the label reports peak level reduced about 4-fold and total exposure about 2-fold compared with an empty stomach. Luke's is wrapped in goat cheese and given after his meal.",
+          "tier": "known",
+          "systems": [
+            "joints"
+          ]
+        },
+        {
+          "text": "As a class these carry kidney and stomach effects, and the label says effects last longer in dogs with kidney or liver disease. Reported adverse events include raised BUN and creatinine.",
+          "tier": "known",
+          "systems": [
+            "water",
+            "joints"
+          ]
+        },
+        {
+          "text": "Must not be combined with another NSAID or a corticosteroid.",
+          "tier": "known"
+        }
+      ],
+      "sources": [
+        "Galliprant (grapiprant) FDA label, DailyMed",
+        "VCA Animal Hospitals, Grapiprant"
+      ],
+      "unknowns": [
+        "whether his vet intends it with food",
+        "how his kidney values change its clearance (VQ-4)"
+      ]
     },
     {
       "key": "amantadine",
@@ -26,102 +215,265 @@
       "colour": "--supp",
       "strengthMg": 100,
       "tabletsPerDose": 1,
-      "rounds": [],
-      "maxPerDoseTablets": 1,
-      "maxPer24hMg": 100,
+      "rounds": [
+        "wake"
+      ],
+      "maxPer24hDoses": 1,
       "minGapHours": null,
-      "withFood": null,
-      "source": "compendium",
-      "modelled": "builds",
-      "unknowns": ["which round (VQ-13 may change the dose)"]
+      "source": "Rikki",
+      "vq": "VQ-13",
+      "acts": [
+        {
+          "system": "joints",
+          "effect": "Turns down the nervous system's volume on long-standing pain. A background effect, not something he feels an hour after the tablet.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "buildsOverDays",
+        "daysToEffectFrom": 14,
+        "daysToEffectTo": 21
+      },
+      "variability": "Takes two to three weeks of daily dosing before any benefit shows, and it is rarely effective on its own.",
+      "caveats": [
+        {
+          "text": "Cleared by the kidneys, so it can accumulate in a dog with kidney disease, and the dose may need reducing. This is VQ-13, and Luke's kidney values are raised.",
+          "tier": "known",
+          "systems": [
+            "water",
+            "joints"
+          ]
+        }
+      ],
+      "sources": [
+        "Today's Veterinary Practice, Gabapentin and Amantadine for Chronic Pain",
+        "VCA Animal Hospitals, Amantadine"
+      ],
+      "unknowns": [
+        "which round his vet intends",
+        "whether the dose should change with his kidney values (VQ-13)"
+      ]
     },
     {
-      "key": "opioid",
-      "name": "Opioid",
-      "placeholder": true,
-      "colour": "--opi",
-      "strengthMg": null,
-      "tabletsPerDose": 2,
-      "rounds": [],
-      "asNeeded": true,
-      "maxPerDoseTablets": 2,
-      "maxPer24hDoses": 2,
-      "maxPer24hTablets": 4,
-      "minGapHours": null,
-      "withFood": null,
-      "source": "placeholder",
-      "modelled": false,
-      "vq": "VQ-3",
-      "unknowns": ["name", "pill strength", "minimum gap (VQ-3)"]
-    },
-    {
-      "key": "nsaid",
-      "name": "NSAID",
-      "placeholder": true,
-      "colour": "--nsaid",
-      "strengthMg": null,
-      "tabletsPerDose": null,
-      "rounds": [],
-      "minGapHours": null,
-      "source": "placeholder",
-      "modelled": false,
-      "vq": "VQ-1",
-      "unknowns": ["whether any NSAID is active at all (VQ-1)", "name", "dose"]
-    },
-    {
-      "key": "antacid",
-      "name": "Antacid",
-      "placeholder": true,
+      "key": "omeprazole",
+      "name": "Omeprazole",
       "colour": "--gas",
-      "strengthMg": null,
-      "tabletsPerDose": null,
-      "rounds": [],
+      "strengthMg": 20,
+      "tabletsPerDose": 1,
+      "rounds": [
+        "wake"
+      ],
+      "maxPer24hDoses": 1,
       "minGapHours": null,
-      "source": "placeholder",
-      "modelled": false,
-      "unknowns": ["name", "dose", "which round"]
+      "source": "Rikki",
+      "acts": [
+        {
+          "system": "gut",
+          "effect": "Shuts down acid production in the stomach.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "perDose",
+        "onsetMinFrom": 60,
+        "onsetMinTo": 60,
+        "peakHoursFrom": 2,
+        "peakHoursTo": 4,
+        "durationHoursFrom": 12,
+        "durationHoursTo": 24
+      },
+      "variability": "Acid starts dropping within about an hour, but it takes three to five days of steady dosing to reach full effect.",
+      "caveats": [
+        {
+          "text": "The 2018 ACVIM consensus recommends every 12 hours. Once daily is documented as giving suboptimal acid suppression over 24 hours. Luke gets it once, at wake.",
+          "tier": "known"
+        },
+        {
+          "text": "Less stomach acid also means less of the body's own defence against bacteria in raw food. Luke eats raw pork blocks.",
+          "tier": "known",
+          "systems": [
+            "gut"
+          ]
+        }
+      ],
+      "sources": [
+        "ACVIM consensus statement on rational administration of gastrointestinal protectants (2018)",
+        "Veterinary Partner (VIN), Omeprazole"
+      ],
+      "unknowns": [
+        "why it was prescribed",
+        "whether his vet wants twice daily"
+      ]
     },
     {
-      "key": "gasx",
+      "key": "simethicone",
       "name": "Gas-X",
       "alsoCalled": "simethicone",
       "colour": "--gas",
-      "strengthMg": null,
-      "tabletsPerDose": null,
-      "rounds": [],
+      "strengthMg": 125,
+      "tabletsPerDose": 2,
+      "rounds": [
+        "wake"
+      ],
       "minGapHours": null,
-      "source": "compendium",
-      "modelled": false,
-      "unknowns": ["dose", "which round"]
+      "source": "Rikki",
+      "acts": [
+        {
+          "system": "gut",
+          "effect": "Merges small gas bubbles into larger ones he can burp or pass. Works entirely inside the gut and never enters his bloodstream.",
+          "tier": "known"
+        }
+      ],
+      "window": {
+        "kind": "perDose",
+        "onsetMinFrom": 15,
+        "onsetMinTo": 30,
+        "peakHoursFrom": 0.5,
+        "peakHoursTo": 1,
+        "durationHoursFrom": 3,
+        "durationHoursTo": 4
+      },
+      "variability": "Not absorbed, so there is no blood level to model. The window is how long it plausibly acts in the gut.",
+      "caveats": [
+        {
+          "text": "Does NOT prevent or treat bloat (GDV). Bloat is an emergency and Weimaraners are a high-risk breed. VQ-9.",
+          "tier": "known",
+          "systems": [
+            "gut"
+          ]
+        },
+        {
+          "text": "Most useful after a meal, once gas has formed, rather than before one as a preventive.",
+          "tier": "known"
+        }
+      ],
+      "sources": [
+        "VCA Animal Hospitals, Simethicone"
+      ],
+      "unknowns": [
+        "the dose his vet intends"
+      ]
     },
     {
-      "key": "supplements",
-      "name": "Supplements",
-      "placeholder": true,
+      "key": "hempchew",
+      "name": "Hemp chew",
+      "alsoCalled": "Super Snouts, 6 mg CBD + CBG",
+      "colour": "--supp",
+      "strengthMg": 6,
+      "tabletsPerDose": 1,
+      "rounds": [
+        "wake"
+      ],
+      "minGapHours": null,
+      "source": "Rikki",
+      "acts": [
+        {
+          "system": "alertness",
+          "effect": "May calm or sedate.",
+          "tier": "extrapolated"
+        },
+        {
+          "system": "joints",
+          "effect": "Given for mobility and joint support. Evidence in dogs is limited.",
+          "tier": "extrapolated"
+        }
+      ],
+      "window": null,
+      "variability": "No reliable published time course for this product at this dose in dogs, so the app shows no window rather than inventing one.",
+      "caveats": [
+        {
+          "text": "CBD and CBDA inhibit the dog liver enzymes CYP2B11 and CYP2D15, which are the enzymes that clear tramadol. Given together, tramadol may leave his system more slowly than expected.",
+          "tier": "known"
+        }
+      ],
+      "sources": [
+        "Court et al., Journal of Veterinary Pharmacology and Therapeutics (2024), CBD and CBDA effects on canine cytochrome P-450"
+      ],
+      "unknowns": [
+        "time course at this dose",
+        "how much the interaction matters in practice"
+      ]
+    },
+    {
+      "key": "cosequin",
+      "name": "Cosequin",
       "colour": "--supp",
       "strengthMg": null,
-      "tabletsPerDose": null,
-      "rounds": [],
+      "tabletsPerDose": 3,
+      "rounds": [
+        "wake"
+      ],
       "minGapHours": null,
-      "source": "placeholder",
-      "modelled": false,
+      "source": "Rikki",
       "vq": "VQ-14",
-      "unknowns": ["the individual items (VQ-14)"]
-    }
-  ],
-  "effects": {
-    "furosemide": {
-      "onsetMinFrom": 30,
-      "onsetMinTo": 60,
-      "peakHoursFrom": 1,
-      "peakHoursTo": 2,
-      "durationHoursFrom": 4,
-      "durationHoursTo": 6,
-      "variability": "Oral absorption in dogs varies from 10% to 100%, so the effect in any one dog is hard to predict. Treat every time here as a rough window, not a schedule.",
-      "sources": [
-        "Merck Veterinary Manual, Diuretics for Use in Animals",
-        "BMC Veterinary Research (2021), furosemide pharmacokinetics and diuretic effect in healthy beagle dogs: mean diuresis 5.72 h, back to baseline by 6 h"
+      "acts": [
+        {
+          "system": "joints",
+          "effect": "Joint supplement. Any benefit builds over weeks.",
+          "tier": "extrapolated"
+        }
+      ],
+      "window": {
+        "kind": "buildsOverDays",
+        "daysToEffectFrom": 28,
+        "daysToEffectTo": 56
+      },
+      "variability": "Evidence for joint supplements in dogs is mixed. Shown as a background item, never as something acting today.",
+      "caveats": [
+        {
+          "text": "Which supplements are safe with his kidneys, especially for phosphorus, is VQ-14 and unanswered.",
+          "tier": "known"
+        }
+      ],
+      "sources": [],
+      "unknowns": [
+        "phosphorus content",
+        "whether it is helping at all"
       ]
     }
-  }
+  ],
+  "interactions": [
+    {
+      "between": [
+        "hempchew",
+        "tramadol"
+      ],
+      "systems": [
+        "alertness",
+        "joints"
+      ],
+      "text": "The hemp chew's CBD inhibits the liver enzymes that clear tramadol, so tramadol may last longer and sit higher than the dose alone suggests. They are given together.",
+      "tier": "known",
+      "sources": [
+        "Court et al., J Vet Pharmacol Ther (2024), canine cytochrome P-450"
+      ]
+    },
+    {
+      "between": [
+        "galliprant",
+        "furosemide"
+      ],
+      "systems": [
+        "water"
+      ],
+      "text": "Galliprant carries kidney cautions and Luke's values are already raised; furosemide pulls fluid out. Dehydration is the thing that links them, which is why water matters so much on this regimen.",
+      "tier": "extrapolated",
+      "sources": [
+        "Galliprant FDA label, DailyMed"
+      ]
+    }
+  ],
+  "interactionsNote": "These are the ones that have been looked up, for the drugs Luke actually takes. This is not a complete interaction check. Silence about anything else means nobody has looked it up, not that there is nothing there.",
+  "foodNotes": [
+    {
+      "drug": "galliprant",
+      "text": "Food reduces absorption substantially. Peak level about 4-fold lower, total exposure about 2-fold lower, per the label.",
+      "tier": "known"
+    },
+    {
+      "drug": "simethicone",
+      "text": "Most useful after a meal, when gas has already formed.",
+      "tier": "known"
+    }
+  ]
 }

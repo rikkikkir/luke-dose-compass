@@ -6,7 +6,8 @@
 
 import {
   readEvents, liveEvents, inOrder, lastDose, dosesInWindow, tabletsInWindow,
-  lastWake, logDose, logMark, undo, checkAgainstMax, furosemideWindow,
+  lastWake, logDose, logMark, undo, checkAgainstMax,
+  effectWindow, buildupState, bodyState,
   storageIsDurable, windowFor, HOUR, WINDOW_HOURS,
   readLocalRegimen, writeLocalRegimen, mergeRegimen, asText,
 } from './store.js';
@@ -74,23 +75,24 @@ function nowRow(drug, events, now) {
 
   body += `<p class="row-total">${esc(totalsLine(drug, events, now))}</p>`;
 
-  // The one drug where every number is real, so the only one the app
-  // says anything about. Always a range, always with the caveat.
-  if (drug.key === 'furosemide' && last && regimen?.effects?.furosemide) {
-    const w = furosemideWindow(since, regimen.effects.furosemide);
-    if (w) {
-      body += `<p class="window"><span class="window-state">${w.icon} ${esc(w.word)}</span> ${esc(w.line)}</p>`;
-      body += `<details class="why"><summary>Where this comes from</summary>
-        <p>${esc(regimen.effects.furosemide.variability)}</p>
-        <ul>${regimen.effects.furosemide.sources.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></details>`;
-    }
+  // One path for every drug now, driven by regimen.json. A drug with no
+  // sourced window produces nothing here rather than a guess.
+  const state = buildupState(drug, events, now) || (last ? effectWindow(drug, since) : null);
+
+  if (state && state.word) {
+    body += `<p class="window"><span class="window-state">${state.icon} ${esc(state.word)}</span> ${esc(state.line || '')}</p>`;
+    if (state.note) body += `<p class="unknown">${esc(state.note)}</p>`;
+  } else if (last) {
+    body += `<p class="unknown">? Logged only. There is no reliable published time course for this one, so the app shows none.</p>`;
   }
 
-  if (!drug.modelled) {
-    const why = drug.placeholder
-      ? `The app has no name or strength for this one${drug.vq ? ` (${esc(drug.vq)})` : ''}, so it logs the dose and says nothing about what it is doing in him.`
-      : 'Logged only. The app does not estimate what this one is doing.';
-    body += `<p class="unknown">? ${why}</p>`;
+  if ((drug.variability || (drug.sources || []).length || (drug.caveats || []).length)) {
+    body += `<details class="why"><summary>Where this comes from</summary>
+      ${drug.variability ? `<p>${esc(drug.variability)}</p>` : ''}
+      ${(drug.caveats || []).map((c) => `<p class="caveat"><b>${c.tier === 'known' ? 'Known' : 'Extrapolated'}:</b> ${esc(c.text)}</p>`).join('')}
+      ${(drug.sources || []).length ? `<ul>${drug.sources.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="unknown">No published source for this one.</p>'}
+      ${(drug.unknowns || []).length ? `<p class="unknown">Still unknown: ${esc(drug.unknowns.join('; '))}</p>` : ''}
+    </details>`;
   }
 
   return `<li class="drug-card">
@@ -98,6 +100,69 @@ function nowRow(drug, events, now) {
       <span class="drug-name">${esc(drug.name)}${drug.alsoCalled ? ` <span class="also">(${esc(drug.alsoCalled)})</span>` : ''}</span>
       ${drug.placeholder ? '<span class="tag">needs real numbers</span>' : ''}
     </div>${body}</li>`;
+}
+
+/* ------------------------------------------------------------ his body now */
+
+/* SPEC-feel: "understand, empathize, plan, predict and learn how Luke likely
+   feels: where in his body, how strongly, and when." Certainty is shown in the
+   piece's own language, not in a footnote: known is solid, extrapolated is
+   dashed and dimmed. S4 everywhere - icon plus word, ranges not numbers.
+   S7 everywhere - this never diagnoses and never recommends a dose. */
+
+function systemCard(entry) {
+  const { system, acting, interactions, caveats } = entry;
+
+  if (!acting.length) {
+    return `<li class="sys sys-quiet">
+      <h3>${esc(system.name)}</h3>
+      <p class="unknown">Nothing logged that acts here right now.</p>
+      <p class="sys-note">${esc(system.note)}</p></li>`;
+  }
+
+  const lines = acting.map(({ drug, act, state, kind, tier, last }) => {
+    // A drug that builds counts from its FIRST dose, not its last. state.days
+    // is computed from the first; last.atUTC is the most recent, which would
+    // have read "day 5" for a drug last given four days ago.
+    const when = kind === 'builds'
+      ? (state && state.days != null ? `day ${Math.floor(state.days) + 1} of dosing` : null)
+      : (last ? elapsed(Date.now() - last.atUTC) : null);
+    const head = state && state.word
+      ? `<span class="window-state">${state.icon} ${esc(state.word)}</span>`
+      : '<span class="window-state">\u00b7 Logged</span>';
+    return `<div class="sys-drug tier-${tier}">
+      <p class="sys-drug-head"><span class="dot" style="background:var(${drug.colour})"></span>
+        <b>${esc(drug.name)}</b> ${head}
+        ${when ? `<span class="sys-when">${esc(when)}</span>` : ''}</p>
+      <p class="sys-effect">${esc(act.effect)}</p>
+      ${state && state.line ? `<p class="sys-line">${esc(state.line)}</p>` : ''}
+      <p class="tierlabel">${tier === 'known' ? 'From published pharmacology' : tier === 'logged' ? 'From your log' : 'Extrapolated \u2014 a reasonable guess, not a finding'}</p>
+    </div>`;
+  }).join('');
+
+  const inter = interactions.map((i) => `<p class="sys-inter">\u26a0 ${esc(i.text)}
+    <span class="tierlabel">${i.tier === 'known' ? 'From published pharmacology' : 'Extrapolated'}</span></p>`).join('');
+
+  return `<li class="sys">
+    <h3>${esc(system.name)}</h3>
+    ${lines}${inter}
+    <details class="why"><summary>What this part assumes</summary>
+      <p class="sys-note">${esc(system.note)}</p>
+      ${caveats.map((c) => `<p class="caveat"><b>${esc(c.drug)}:</b> ${esc(c.text)}</p>`).join('')}
+    </details></li>`;
+}
+
+export function renderBody(root, now = Date.now()) {
+  if (!regimen) { root.innerHTML = '<p class="unknown">Loading\u2026</p>'; return; }
+  const events = readEvents();
+  const state = bodyState(events, regimen, now);
+
+  root.innerHTML = `<a class="back" href="#home">&larr; Luke</a>
+    <h2>His body, right now</h2>
+    <p class="interp">Interpretation, not measurement. Nothing here senses Luke.</p>
+    <ul class="systems">${state.map(systemCard).join('')}</ul>
+    <p class="foot-note">${esc(regimen.interactionsNote || '')}</p>
+    <p class="foot-note">This never diagnoses and never recommends a dose. What Luke shows you is better evidence than anything on this screen.</p>`;
 }
 
 export function renderNow(root, now = Date.now()) {
@@ -109,7 +174,7 @@ export function renderNow(root, now = Date.now()) {
     ? `<p class="vsub">Awake ${esc(elapsed(now - wake.atUTC)).replace(' ago', '')} · since ${esc(clockLabel(wake.atUTC, wake.atOffset))}</p>`
     : '<p class="vsub">No wake logged yet</p>';
 
-  const ordered = [...regimen.drugs].sort((a, b) => (b.modelled ? 1 : 0) - (a.modelled ? 1 : 0));
+  const ordered = [...regimen.drugs].sort((a, b) => (b.window ? 1 : 0) - (a.window ? 1 : 0));
 
   root.innerHTML = `<a class="back" href="#home">&larr; Luke</a>
     <h2>Right now</h2>${header}
@@ -412,9 +477,11 @@ export function refresh(now = Date.now()) {
     const nowEl = document.getElementById('now-body');
     const logEl = document.getElementById('log-body');
     const drugsEl = document.getElementById('drugs-body');
+    const bodyEl = document.getElementById('body-body');
     if (nowEl) renderNow(nowEl, now);
     if (logEl) renderLog(logEl, now);
     if (drugsEl) renderDrugs(drugsEl);
+    if (bodyEl) renderBody(bodyEl, now);
     banner();
   } catch (err) {
     console.warn('render failed', err);   // the crisis card is untouched

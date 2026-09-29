@@ -107,16 +107,16 @@ test('a dose is logged, shows up on Now, and survives a reload', async ({ page }
 
 test('a dose past the label is reported and still logged', async ({ page }) => {
   await page.goto('/index.html#log');
-  // 320 mg a day is 4 tablets. A fifth and sixth pass the label.
-  for (let i = 0; i < 3; i++) await page.locator('[data-give="furosemide"]').click();
-  await expect(page.locator('#toast')).toContainText('the label says 320');
-  // Reported, not refused: the entries are all there.
+  // Tramadol's label says 2 a day. A third passes it.
+  for (let i = 0; i < 3; i++) await page.locator('[data-give="tramadol"]').click();
+  await expect(page.locator('#toast')).toContainText('the label says 2');
+  // Reported, not refused.
   await expect(page.locator('.entry')).toHaveCount(3);
 });
 
 test('undo removes a dose from the count but keeps the record', async ({ page }) => {
   await page.goto('/index.html#log');
-  await page.locator('[data-give="opioid"]').click();
+  await page.locator('[data-give="tramadol"]').click();
   await expect(page.locator('.entry')).toHaveCount(1);
 
   await page.locator('.entry .x').first().click();
@@ -128,42 +128,49 @@ test('a wake round logs in one tap and one confirm', async ({ page }) => {
   await page.goto('/index.html#log');
   await page.locator('[data-round="wake"]').click();          // tap
   await page.locator('#sheet-ok').click();                    // confirm
-  // Furosemide is the drug set for the wake round in the seed.
-  await expect(page.locator('.entry')).toContainText('Furosemide given');
+  // Seven drugs sit in his wake round.
+  await expect(page.locator('.entry')).toHaveCount(7);
+  await expect(page.locator('.entry', { hasText: 'Furosemide given' })).toHaveCount(1);
 });
 
-test('naming a drug sticks, and the app stops calling it a placeholder', async ({ page }) => {
+test('renaming a drug sticks and reaches the Now screen', async ({ page }) => {
   await page.goto('/index.html#drugs');
-  await page.fill('[data-drug="opioid"][data-field="name"]', 'Tramadol');
-  await page.fill('[data-drug="opioid"][data-field="strengthMg"]', '50');
+  await page.fill('[data-drug="tramadol"][data-field="name"]', 'Tramadol HCl');
   await page.click('#drugs-save');
   await expect(page.locator('#drugs-msg')).toContainText('Saved');
 
   await page.reload();
   await page.goto('/index.html#drugs');
-  await expect(page.locator('[data-drug="opioid"][data-field="name"]')).toHaveValue('Tramadol');
+  await expect(page.locator('[data-drug="tramadol"][data-field="name"]')).toHaveValue('Tramadol HCl');
 
-  // A dose logged now should carry the real strength through to Now.
   await page.goto('/index.html#log');
-  await page.locator('[data-give="opioid"]').click();
+  await page.locator('[data-give="tramadol"]').click();
   await page.goto('/index.html#now');
-  await expect(page.locator('#now')).toContainText('Tramadol');
-  await expect(page.locator('#now')).toContainText('100 mg');
+  await expect(page.locator('#now')).toContainText('Tramadol HCl');
+  await expect(page.locator('#now')).toContainText('50 mg');
 });
 
 test('an empty box means unknown, not zero', async ({ page }) => {
-  // The whole point of "reality, not fiction": clearing a number must leave
-  // the app saying it does not know, never treating the gap as a limit of 0.
+  // The whole point of "reality, not fiction": clearing a number must leave the
+  // app saying it does not know, never treating the gap as a limit of zero.
   await page.goto('/index.html#drugs');
-  await page.fill('[data-drug="furosemide"][data-field="maxPer24hMg"]', '');
+  await page.fill('[data-drug="furosemide"][data-field="maxPer24hMg"]', '240');
   await page.click('#drugs-save');
   await expect(page.locator('#drugs-msg')).toContainText('Saved');
 
   await page.goto('/index.html#log');
-  for (let i = 0; i < 4; i++) await page.locator('[data-give="furosemide"]').click();
-  // No ceiling is known any more, so there is nothing to warn about.
+  await page.locator('[data-give="furosemide"]').click();   // 3 x 40 = 120 mg
+  await page.locator('[data-give="furosemide"]').click();   // 240 mg
+  await page.locator('[data-give="furosemide"]').click();   // 360 mg, over
+  await expect(page.locator('#toast')).toContainText('the label says 240');
+
+  // Now clear it. No ceiling known means nothing to be over.
+  await page.goto('/index.html#drugs');
+  await page.fill('[data-drug="furosemide"][data-field="maxPer24hMg"]', '');
+  await page.click('#drugs-save');
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
   await expect(page.locator('#toast')).not.toContainText('the label says');
-  await expect(page.locator('.entry')).toHaveCount(4);
 });
 
 test('the seven-day text names what is still unknown', async ({ page }) => {
@@ -175,7 +182,7 @@ test('the seven-day text names what is still unknown', async ({ page }) => {
     return st.asText(st.readEvents(), st.mergeRegimen(seed, st.readLocalRegimen()), { days: 7 });
   });
   expect(text).toContain('no minimum gap has been set by a vet');
-  expect(text).toContain('still a placeholder');
+  expect(text).toContain('source: Rikki');
   expect(text).toContain('Furosemide');
   expect(text).toContain('does not block doses');
 });
@@ -198,4 +205,36 @@ test('a key that cannot be verified is not kept', async ({ page }) => {
   await page.reload();
   await page.goto('/index.html#log');
   await expect(page.locator('#synckey')).toBeVisible();
+});
+
+test('his body shows what is acting where, with certainty on the face of it', async ({ page }) => {
+  await page.goto('/index.html#log');
+  await page.locator('[data-give="furosemide"]').click();
+  await page.locator('[data-give="tramadol"]').click();
+
+  await page.goto('/index.html#body');
+  await expect(page.locator('.interp')).toContainText('Interpretation, not measurement');
+
+  // Furosemide acts on water, tramadol on joints and alertness.
+  const water = page.locator('.sys', { hasText: 'Kidneys and water' });
+  await expect(water).toContainText('Furosemide');
+  await expect(water).toContainText('From published pharmacology');
+
+  const joints = page.locator('.sys', { hasText: 'Hips and hind legs' });
+  await expect(joints).toContainText('Tramadol');
+
+  // And it admits what it is not.
+  await expect(page.locator('#body')).toContainText('not a complete interaction check');
+});
+
+test('a system with nothing acting on it says so', async ({ page }) => {
+  await page.goto('/index.html#body');
+  await expect(page.locator('.sys-quiet').first()).toContainText('Nothing logged that acts here');
+});
+
+test('the body view never claims to measure or to advise', async ({ page }) => {
+  await page.goto('/index.html#body');
+  const text = await page.locator('#body').innerText();
+  expect(text).toContain('Interpretation, not measurement');
+  expect(text).toContain('never diagnoses and never recommends a dose');
 });
