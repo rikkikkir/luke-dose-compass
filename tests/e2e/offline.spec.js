@@ -137,7 +137,7 @@ test('renaming a drug sticks and reaches the Now screen', async ({ page }) => {
   await page.goto('/index.html#drugs');
   await page.fill('[data-drug="tramadol"][data-field="name"]', 'Tramadol HCl');
   await page.click('#drugs-save');
-  await expect(page.locator('#drugs-msg')).toContainText('Saved');
+  await expect(page.locator('#toast')).toContainText('Saved');
 
   await page.reload();
   await page.goto('/index.html#drugs');
@@ -156,7 +156,7 @@ test('an empty box means unknown, not zero', async ({ page }) => {
   await page.goto('/index.html#drugs');
   await page.fill('[data-drug="furosemide"][data-field="maxPer24hMg"]', '240');
   await page.click('#drugs-save');
-  await expect(page.locator('#drugs-msg')).toContainText('Saved');
+  await expect(page.locator('#toast')).toContainText('Saved');
 
   await page.goto('/index.html#log');
   await page.locator('[data-give="furosemide"]').click();   // 3 x 40 = 120 mg
@@ -200,7 +200,7 @@ test('a key that cannot be verified is not kept', async ({ page }) => {
   await page.goto('/index.html#log');
   await page.fill('#synckey', 'github_pat_obviously_not_a_real_key');
   await page.click('#sync-save');
-  await expect(page.locator('#sync-msg')).not.toHaveText('', { timeout: 15000 });
+  await expect(page.locator('#toast')).not.toHaveText('', { timeout: 15000 });
   // Still offering setup, because a key that failed its check is discarded.
   await page.reload();
   await page.goto('/index.html#log');
@@ -234,7 +234,63 @@ test('a system with nothing acting on it says so', async ({ page }) => {
 
 test('the body view never claims to measure or to advise', async ({ page }) => {
   await page.goto('/index.html#body');
+  await expect(page.locator('.interp')).toBeVisible();   // regimen has loaded
   const text = await page.locator('#body').innerText();
   expect(text).toContain('Interpretation, not measurement');
   expect(text).toContain('never diagnoses and never recommends a dose');
+});
+
+test('the capture screen offers voice and buttons, and the buttons always work', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  const cap = page.locator('#capture-body');
+  // Either a microphone or an honest statement that this browser cannot record.
+  await expect(cap.locator('.mic, .unknown').first()).toBeVisible();
+  await expect(cap.locator('[data-obs]')).toHaveCount(6);
+
+  await page.locator('[data-obs="meal"][data-val="half"]').click();
+  await expect(cap).toContainText('Ate: half');
+  await page.locator('[data-obs="out"][data-val="stool"]').click();
+  await expect(cap).toContainText('Stool');
+});
+
+test('food and water reach the log and survive a reload', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('[data-obs="water"][data-val="some"]').click();
+  await expect(page.locator('#capture-body')).toContainText('Drank');
+  await page.reload();
+  await page.goto('/index.html#capture');
+  await expect(page.locator('#capture-body')).toContainText('Drank');
+});
+
+test('a log file can be brought in, and importing it twice adds nothing', async ({ page }) => {
+  const line = (id, type, at) => JSON.stringify({ id, seq: 1, type, atUTC: at, atOffset: -360, loggedUTC: at, loggedOffset: -360, source: 'oura' });
+  const now = Date.now();
+  const file = {
+    name: 'luke.oura.export.ndjson',
+    mimeType: 'application/x-ndjson',
+    buffer: Buffer.from([line('oura-wake-x', 'wake', now - 5 * 3600000), line('oura-sleep-x', 'sleep', now - 14 * 3600000)].join('\n')),
+  };
+
+  await page.goto('/index.html#capture');
+  await page.locator('#capture-body details.why summary').click();
+  await page.locator('#import-file').setInputFiles(file);
+  await expect(page.locator('#toast')).toContainText('Added 2');
+
+  // Stable ids mean a second import is a no-op, not a duplicate.
+  await page.locator('#import-file').setInputFiles(file);
+  await expect(page.locator('#toast')).toContainText('Added 0');
+  await expect(page.locator('#toast')).toContainText('Already had 2');
+});
+
+test('an imported wake makes the Now screen count from it', async ({ page }) => {
+  const now = Date.now();
+  await page.goto('/index.html#capture');
+  await page.locator('#capture-body details.why summary').click();
+  await page.locator('#import-file').setInputFiles({
+    name: 'w.ndjson', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from(JSON.stringify({ id: 'oura-wake-y', seq: 1, type: 'wake', atUTC: now - 5 * 3600000, atOffset: -360, loggedUTC: now - 5 * 3600000, loggedOffset: -360, source: 'oura' })),
+  });
+  await expect(page.locator('#toast')).toContainText('Added 1');
+  await page.goto('/index.html#now');
+  await expect(page.locator('#now')).toContainText('Awake 5h');
 });

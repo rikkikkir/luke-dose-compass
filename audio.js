@@ -1,0 +1,141 @@
+/* Luke's Dose Compass — her voice.
+
+   She asked to talk through the medications while giving them, rather than tap
+   nine buttons at 4 AM. Recording works with no network; reading the recording
+   back does not, reliably, on iOS. So the rule here is simple and absolute:
+
+       THE RECORDING IS KEPT, ALWAYS. The transcript is a bonus.
+
+   A failed transcript costs a convenience. A discarded recording costs her own
+   voice describing his last weeks, which is not recoverable later.
+
+   Audio lives in IndexedDB — the first thing in this app that genuinely needs
+   it, since localStorage cannot hold a blob. Events stay in localStorage and
+   reference a recording by id. */
+
+const DB = 'luke-audio';
+const STORE = 'notes';
+let dbp = null;
+
+function open() {
+  if (dbp) return dbp;
+  dbp = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbp;
+}
+
+async function tx(mode, fn) {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(STORE, mode);
+    const req = fn(t.objectStore(STORE));
+    t.oncomplete = () => resolve(req && req.result);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+  });
+}
+
+export const putAudio = (id, blob) => tx('readwrite', (s) => s.put(blob, id));
+export const getAudio = (id) => tx('readonly', (s) => s.get(id));
+export const allAudioIds = () => tx('readonly', (s) => s.getAllKeys());
+
+/* Safari's supported formats vary by version, so ask rather than assume. */
+export function pickMimeType() {
+  const wanted = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+  for (const type of wanted) {
+    try { if (MediaRecorder.isTypeSupported(type)) return type; } catch { /* keep looking */ }
+  }
+  return '';   // let the browser choose
+}
+
+export function recordingSupported() {
+  return typeof MediaRecorder !== 'undefined'
+    && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+/* One recorder at a time. Returns a handle with stop(), which resolves to the
+   blob and whatever transcript we managed to get alongside it. */
+export async function startRecording() {
+  if (!recordingSupported()) throw new Error('this browser cannot record');
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    // Permission denied, or no microphone. The buttons still work; say so.
+    throw new Error(err && err.name === 'NotAllowedError'
+      ? 'the microphone is blocked for this site — the buttons below still work'
+      : 'no microphone available — the buttons below still work');
+  }
+
+  const mimeType = pickMimeType();
+  const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.start();
+
+  const startedAt = Date.now();
+  const speech = startSpeech();
+
+  return {
+    startedAt,
+    stop: () => new Promise((resolve) => {
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const transcript = await speech.stop();
+        // Even a zero-length recording resolves: the screen must never claim
+        // a note was saved when nothing was captured, and it decides that by
+        // looking at the blob rather than by assuming.
+        resolve({
+          blob: new Blob(chunks, { type: mimeType || 'audio/mp4' }),
+          transcript,
+          ms: Date.now() - startedAt,
+        });
+      };
+      try { rec.stop(); } catch { resolve({ blob: null, transcript: null, ms: Date.now() - startedAt }); }
+    }),
+  };
+}
+
+/* Speech recognition is a bonus and is treated as one. iOS has documented
+   trouble with it — the microphone not releasing, continuous mode failing,
+   silent fallback to Apple's servers when there is no signal. So every path
+   here resolves rather than rejects, and a null transcript is normal. */
+function startSpeech() {
+  const Ctor = typeof window !== 'undefined'
+    && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  if (!Ctor) return { stop: async () => null };
+
+  let text = '';
+  let rec;
+  try {
+    rec = new Ctor();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) text += e.results[i][0].transcript + ' ';
+      }
+    };
+    rec.onerror = () => { /* a failed transcript is not a failed note */ };
+    rec.start();
+  } catch {
+    return { stop: async () => null };
+  }
+
+  return {
+    stop: async () => {
+      try { rec.stop(); } catch { /* already stopped */ }
+      await new Promise((r) => setTimeout(r, 250));   // let a final result land
+      const trimmed = text.trim();
+      return trimmed || null;
+    },
+  };
+}
