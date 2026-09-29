@@ -421,20 +421,6 @@ test('a stale weight makes every mg/kg figure say so', async ({ page }) => {
   await expect(page.locator('#now')).toContainText('so this figure is out of date');
 });
 
-test('the carrot count is one tap, and counts within the circle', async ({ page }) => {
-  // From her own Watch List: "a drop in carrot count tends to come hours to
-  // days before any other sign he's feeling off."
-  await page.goto('/index.html#capture');
-  await page.locator('[data-carrot="5"]').click();
-  await expect(page.locator('.carrot-line')).toContainText('5');
-  await page.locator('[data-carrot="2"]').click();
-  await expect(page.locator('.carrot-line')).toContainText('7');
-  // With one circle of data it must not CLAIM a drop. (It may say that a few
-  // more circles would let it show one — that sentence is the honest version.)
-  await expect(page.locator('.carrot-line')).not.toContainText('against about');
-  await expect(page.locator('.carrot-line')).toContainText('earlier circles counted');
-});
-
 test('the quick check appears once its definitions are brought in', async ({ page }) => {
   const def = (key, label, every) => JSON.stringify({
     id: `checkdef-${key}`, seq: 1, type: 'checkdef', checkKey: key, label,

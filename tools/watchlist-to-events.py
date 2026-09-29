@@ -7,12 +7,12 @@ her own notes. The app knew none of it.
 
 The most important line on that page, and the reason this tool exists:
 
-    "The number of carrots Luke asks for each day is the household's quietest,
-     most reliable signal. A drop in carrot count tends to come hours to days
-     before any other sign he's feeling off. Keep counting."
-
-A leading indicator, found by the people who live with him. No drug window or
-lab value in this app comes close to that.
+CAUTION ON PROVENANCE. That page also described a daily "carrot count" as his
+most reliable signal. Rikki says that was exaggerated in her archives: she does
+not count them, he gets as many as he wants, and he pursues them. A prior audit
+of that site found two outright fabrications, so treat anything here as a claim
+to confirm with her rather than a fact to build on. The pursuing is real; the
+number never was.
 
 Definitions are written as events so they live in her private log rather than
 in the public repository, sync like everything else, and can be edited later
@@ -24,7 +24,7 @@ without a release.
 import hashlib, json, sys
 from datetime import datetime, timezone
 
-SOURCE = "Luke's Watch List — Thornwood veterinary record and owner notes"
+SOURCE = "Luke's Watch List — Thornwood record and owner notes. UNCONFIRMED: that page mixes clinical record with written-up notes, and one claim on it (a daily carrot count) Rikki has said was exaggerated."
 
 # Quoted from her page, not paraphrased, so the wording she trusts is the
 # wording she sees.
@@ -32,12 +32,10 @@ CHECKS = [
     dict(key="breathing", every="daily", label="Breathing looks calm at rest",
          detail="Calm, even, unlabored is the baseline. A sustained climb in resting rate, "
                 "or any effort to breathe, is an early heart-fluid warning."),
-    dict(key="carrots", every="daily", label="Carrots requested",
-         detail="His own quality-of-life meter. A drop tends to come hours to days before "
-                "any other sign he's feeling off. Count them.",
-         counter=True),
-    dict(key="meals", every="daily", label="Ate his meals",
-         detail="He is a devoted eater. A real loss of appetite is out of character."),
+    dict(key="meals", every="daily", label="Ate his meals, still pursuing his carrots",
+         detail="He is a devoted eater and he loves carrots — he gets as many as he wants "
+                "and he pursues them. A real loss of appetite is out of character, and him "
+                "no longer chasing what he loves is the thing to notice. Not a number."),
     dict(key="lasix", every="daily", label="Both Lasix doses, about 12 hours apart",
          detail="Her records record the intent as roughly 12 hours apart. No vet has set a "
                 "minimum gap, so the app does not enforce one — this is the plan, not a rule."),

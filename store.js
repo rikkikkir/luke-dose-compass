@@ -911,42 +911,15 @@ export function checksDue(events, now = Date.now()) {
   });
 }
 
-/* ------------------------------------------------------------ carrot count
+/* A carrot count lived here, built on a line in her archives describing it as
+   his most reliable signal. She says that was exaggerated: she does not count
+   them, he gets as many as he wants, and he pursues.
 
-   Counted per circle, because that is the unit she lives in. Returns the
-   recent run so a DROP is visible, which is the whole point — the signal is
-   the change, not the number. */
-export function carrotCounts(events, now = Date.now(), howMany = 7) {
-  const ring = circles(events, now, howMany);
-  return ring.map((c) => ({
-    start: c.start,
-    current: c.current,
-    count: c.events
-      .filter((e) => e.type === 'carrots')
-      .reduce((n, e) => n + (Number(e.value) || 0), 0),
-    logged: c.events.some((e) => e.type === 'carrots'),
-  }));
-}
-
-/* A drop against his own recent run. Described, never diagnosed (S7): the app
-   says the number fell and what her own records say that tends to mean, and
-   stops there. */
-export function carrotTrend(events, now = Date.now()) {
-  const counts = carrotCounts(events, now, 7);
-  const past = counts.slice(1).filter((c) => c.logged);
-  const today = counts[0];
-  if (!today || !today.logged || past.length < 3) {
-    return { enough: false, today: today && today.logged ? today.count : null, samples: past.length };
-  }
-  const typical = past.reduce((a, c) => a + c.count, 0) / past.length;
-  return {
-    enough: true,
-    today: today.count,
-    typical,
-    down: today.count < typical - 1,
-    samples: past.length,
-  };
-}
+   Removed rather than reshaped. The pursuing is real and belongs in the
+   appetite check in her own words; the number was never hers. Her archives
+   hold embellished material — a prior audit of that site found two outright
+   fabrications — so anything taken from them is a claim to check, not a fact
+   to build on. This app got that wrong once already today. */
 
 /* A generic append for event kinds that are neither a dose nor an observation
    — a check, a definition, anything later. Same rules, same shape. */

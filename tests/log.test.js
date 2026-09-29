@@ -310,7 +310,7 @@ test('a group with nothing recorded is absent, not empty', () => {
 
 /* --------------------------------- his own signal, and the thirty-second check */
 
-import { circles, carrotCounts, carrotTrend, checksDue, checkDefs } from '../store.js';
+import { circles, checksDue, checkDefs } from '../store.js';
 
 const obs = (type, value, msAgo) => ({
   id: `o-${type}-${msAgo}`, seq: 1, type, value,
@@ -319,23 +319,16 @@ const obs = (type, value, msAgo) => ({
 
 test('something logged this instant lands in the current circle', () => {
   // With no wake logged the circle starts at now, and a strict boundary made
-  // it empty — so a carrot counted on opening the app vanished immediately.
-  const events = [obs('carrots', 3, 0)];
+  // it empty — so anything logged on opening the app vanished immediately.
+  const events = [obs('note', 'x', 0)];
   assert.equal(circles(events, T0, 1)[0].events.length, 1);
-  assert.equal(carrotCounts(events, T0, 1)[0].count, 3);
 });
 
-test('carrots add up within a circle', () => {
-  const events = [obs('carrots', 5, 1000), obs('carrots', 2, 500)];
-  assert.equal(carrotCounts(events, T0, 1)[0].count, 7);
-});
-
-test('a drop is only claimed once there is enough to compare against', () => {
-  // The signal is the change, so with one or two circles there is nothing to
-  // say and the app must not say it.
-  const thin = carrotTrend([obs('carrots', 2, 0)], T0);
-  assert.equal(thin.enough, false);
-  assert.equal(thin.today, 2);
+test('an unanchored circle keeps recent activity together', () => {
+  // Anchoring at `now` put everything logged a moment earlier into the
+  // PREVIOUS circle. It now anchors to the oldest recent thing instead.
+  const events = [obs('note', 'a', 1000), obs('note', 'b', 500)];
+  assert.equal(circles(events, T0, 1)[0].events.length, 2);
 });
 
 test('a check is due by elapsed time, not by calendar day', () => {
