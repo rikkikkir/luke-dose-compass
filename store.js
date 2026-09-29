@@ -936,3 +936,159 @@ export function logEvent(fields, { now = Date.now() } = {}) {
   writeEvents(events);
   return e;
 }
+
+/* ===========================================================================
+   Pain checks, good days, and the rest of milestone 1.
+
+   SPEC-domain is specific about the pain check and worth following exactly:
+   the items are his own observed signs and Rikki can edit them; each is rated
+   0 (not seen), 1 (some) or 2 (clearly); the total is labelled as HER pain
+   check and never as a clinical score; and after an opioid dose an optional
+   check is offered at observations.opioidFollowUpMinutes.
+
+   The learning rules matter too, because they are what stop this becoming a
+   recommendation engine: only the FIRST high check after a dose counts, only
+   when no other pain drug came in between, and the observed window is shown
+   beside the published one and NEVER replaces it.
+   =========================================================================== */
+
+/* His observed signs, from the snapshot. Rikki can edit them, so they live in
+   the log as definitions rather than in the code. */
+export const DEFAULT_PAIN_ITEMS = [
+  'Rises slowly',
+  'Right hind leg gives out',
+  'Back legs move together when running',
+  'Guards the right hip when settling',
+  'Gets winded, needs more breaks',
+  'Digs more slowly, one front leg at a time',
+];
+
+export function painItems(events, now = Date.now()) {
+  const defs = inOrder(liveEvents(events)).filter((e) => e.type === 'paindef' && e.atUTC <= now);
+  if (!defs.length) return DEFAULT_PAIN_ITEMS;
+  return defs[defs.length - 1].items || DEFAULT_PAIN_ITEMS;
+}
+
+/* The maximum travels with the check, because she can edit the list and a
+   score out of 12 means nothing once the list is out of 10. */
+export function scorePainCheck(scores, itemCount) {
+  const values = Object.values(scores || {}).map(Number).filter((n) => !Number.isNaN(n));
+  return { total: values.reduce((a, b) => a + b, 0), max: itemCount * 2 };
+}
+
+export function isHighCheck(check) {
+  const fraction = cfg('observations.painCheckHighFraction', 0.25);
+  return check && check.max > 0 && check.total >= fraction * check.max;
+}
+
+/* Is an optional follow-up due after an opioid dose? An OFFER, never a prompt:
+   CLAUDE.md says nothing nags, scolds or guilts. */
+export function opioidFollowUpDue(events, regimen, now = Date.now()) {
+  const minutes = cfg('observations.opioidFollowUpMinutes', 90);
+  const painDrugs = (regimen?.drugs || []).filter((d) => d.asNeeded
+    && (d.acts || []).some((a) => a.system === 'joints'));
+  for (const drug of painDrugs) {
+    const last = lastDose(events, drug.key, now);
+    if (!last) continue;
+    const since = now - last.atUTC;
+    if (since < minutes * 60000) continue;
+    if (since > (minutes + 90) * 60000) continue;      // the window passes
+    const checked = inOrder(liveEvents(events))
+      .some((e) => e.type === 'paincheck' && e.atUTC > last.atUTC);
+    if (!checked) return { drug, sinceMs: since, minutes };
+  }
+  return null;
+}
+
+/* What his checks say about how a dose actually goes, per SPEC-domain.
+   Counts only the FIRST high check after each dose, and only when no other
+   pain drug came in between. Never produces a recommendation (S7). */
+export function opioidResponse(events, regimen, now = Date.now()) {
+  const drug = (regimen?.drugs || []).find((d) => d.asNeeded);
+  if (!drug) return null;
+  const need = cfg('observations.learningMinQualifyingChecks', 20);
+
+  const live = inOrder(liveEvents(events));
+  const painKeys = new Set((regimen.drugs || [])
+    .filter((d) => (d.acts || []).some((a) => a.system === 'joints')).map((d) => d.key));
+
+  const doses = live.filter((e) => e.type === 'dose' && e.drugKey === drug.key && e.atUTC <= now);
+  const qualifying = [];
+
+  for (const dose of doses) {
+    const nextPainDose = live.find((e) => e.type === 'dose' && painKeys.has(e.drugKey) && e.atUTC > dose.atUTC);
+    const limit = nextPainDose ? nextPainDose.atUTC : Infinity;
+    const firstHigh = live.find((e) => e.type === 'paincheck' && e.atUTC > dose.atUTC && e.atUTC < limit
+      && isHighCheck(e));
+    if (firstHigh) qualifying.push({ dose, check: firstHigh, afterMs: firstHigh.atUTC - dose.atUTC });
+  }
+
+  const enough = qualifying.length >= need;
+  const hours = qualifying.map((q) => q.afterMs / HOUR);
+  return {
+    qualifying: qualifying.length,
+    need,
+    enough,
+    // Shown BESIDE the published window, never instead of it.
+    observed: enough ? {
+      from: Math.min(...hours), to: Math.max(...hours),
+      median: hours.slice().sort((a, b) => a - b)[Math.floor(hours.length / 2)],
+    } : null,
+  };
+}
+
+/* ------------------------------------------------------- good day / bad day */
+
+export function dayMark(events, now = Date.now()) {
+  const ring = circles(events, now, 1)[0];
+  const marks = ring.events.filter((e) => e.type === 'dayMark');
+  return marks.length ? marks[marks.length - 1] : null;
+}
+
+export function dayMarks(events, now = Date.now(), howMany = 14) {
+  return circles(events, now, howMany).map((c) => {
+    const m = c.events.filter((e) => e.type === 'dayMark');
+    return { start: c.start, current: c.current, value: m.length ? m[m.length - 1].value : null };
+  });
+}
+
+/* --------------------------------------------------------- backup reminder */
+
+/* The number has been sitting in config, unread, since the first deploy. */
+export function backupDue(now = Date.now()) {
+  const days = cfg('backup.reminderDays', 7);
+  const since = daysSinceBackup(now);
+  if (since == null) return { due: true, never: true, days };
+  return { due: since >= days, never: false, sinceDays: since, days };
+}
+
+/* ------------------------------------------------------------------- CSV
+
+   ROADMAP's done-when is literally "the CSV opens in Numbers", so: a header
+   row, one row per event, quoted, and no cleverness. */
+export function asCsv(events = readEvents(), regimen = null, { now = Date.now(), days = 30 } = {}) {
+  const from = now - days * 24 * HOUR;
+  const rows = [['when', 'local time', 'what', 'detail', 'amount', 'mg', 'past the label', 'source']];
+  const nameOf = (k) => ((regimen?.drugs || []).find((d) => d.key === k) || {}).name || k || '';
+
+  for (const e of inOrder(liveEvents(events))) {
+    if (e.atUTC < from || e.atUTC > now) continue;
+    const local = new Date(e.atUTC + (e.atOffset || 0) * 60000).toISOString().replace('T', ' ').slice(0, 16);
+    const drug = (regimen?.drugs || []).find((d) => d.key === e.drugKey);
+    rows.push([
+      new Date(e.atUTC).toISOString(),
+      local,
+      e.type,
+      e.type === 'dose' ? nameOf(e.drugKey) : (e.name || e.value || e.text || ''),
+      e.tablets ?? e.value ?? '',
+      e.type === 'dose' && drug?.strengthMg ? e.tablets * drug.strengthMg : '',
+      e.pastMax ? 'yes' : '',
+      e.source || '',
+    ]);
+  }
+
+  return rows.map((r) => r.map((c) => {
+    const s = String(c ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n') + '\n';
+}

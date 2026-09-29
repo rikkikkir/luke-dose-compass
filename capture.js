@@ -11,7 +11,9 @@
         is no signal, and when she is too tired to talk. */
 
 import { readEvents, logDose, logObservation, importEvents, recent, inOrder, liveEvents,
-         checksDue, logEvent } from './store.js';
+         checksDue, logEvent, painItems, scorePainCheck, isHighCheck,
+         opioidFollowUpDue, dayMark, backupDue, asCsv, markBackedUp,
+         exportPayload } from './store.js';
 import { startRecording, recordingSupported, putAudio, getAudio } from './audio.js';
 import { parse, describe as describeParse } from './parse.js';
 
@@ -19,6 +21,8 @@ let regimen = null;
 let recorder = null;
 let pending = null;      // { parsed, audioId, blob, ms } waiting for her confirmation
 let onChange = () => {};
+let painOpen = false;
+let painScores = {};
 
 /* Which expandable sections are open. Re-rendering rebuilds the markup, which
    would close them — so tapping one environment chip would collapse the very
@@ -60,6 +64,9 @@ export function renderCapture(root) {
 
     ${mic}
     ${pendingCard()}
+    ${followUpCard(events)}
+    ${dayCard(events)}
+    ${painCard(events)}
     ${checkCard(events)}
 
     <p class="k">Or tap</p>
@@ -93,6 +100,17 @@ export function renderCapture(root) {
     <p class="k">Recent · ${notes.length} in the last 48 hours</p>
     <div class="entries">${notes.length ? notes.map(noteRow).join('')
       : '<p class="unknown">Nothing yet. Talk to it, or tap something above.</p>'}</div>
+
+    <details class="why" id="backup-details"${open('backup-details')}>
+      <summary>Save a copy${backupDue().due ? ' \u00b7 worth doing' : ''}</summary>
+      <p class="sync-lead">${backupDue().never
+        ? 'No copy has been saved from this device yet.'
+        : `Last saved ${Math.round(backupDue().sinceDays)} days ago.`} Nothing here leaves the device until you choose where to put it.</p>
+      <div class="sheet-actions">
+        <button class="btn primary" type="button" id="export-csv">Spreadsheet for a vet</button>
+        <button class="btn" type="button" id="export-json">Full backup</button>
+      </div>
+    </details>
 
     <details class="why" id="import-details"${open('import-details')}>
       <summary>Bring in a log from a file</summary>
@@ -135,6 +153,58 @@ function pendingCard() {
    stops chasing the thing he loves is telling you something. That belongs in
    the appetite check, in her words, as something to notice rather than a
    figure to record. Counting was my invention, not her life. */
+
+/* An OFFER after an opioid dose, never a prompt. CLAUDE.md: nothing nags,
+   scolds or guilts. It appears in a window and then goes away by itself. */
+function followUpCard(events) {
+  const due = opioidFollowUpDue(events, regimen);
+  if (!due || painOpen) return '';
+  return `<div class="card followup">
+    <span class="k">It has been about ${Math.round(due.sinceMs / 60000)} minutes</span>
+    <p class="carrot-line">Since his ${esc(due.drug.name)}. If you want to note how he seems now, this is roughly when a difference would show.</p>
+    <div class="sheet-actions">
+      <button class="btn primary" type="button" id="pain-open">Do a pain check</button>
+      <button class="btn" type="button" id="pain-skip">Not now</button>
+    </div>
+  </div>`;
+}
+
+/* One tap per circle. From ROADMAP milestone 1. */
+function dayCard(events) {
+  const mark = dayMark(events);
+  return `<div class="card">
+    <span class="k">This circle, so far</span>
+    <div class="chips">
+      <button class="chip${mark && mark.value === 'good' ? ' primary' : ''}" type="button" data-day="good">A good one</button>
+      <button class="chip${mark && mark.value === 'mixed' ? ' primary' : ''}" type="button" data-day="mixed">Mixed</button>
+      <button class="chip${mark && mark.value === 'bad' ? ' primary' : ''}" type="button" data-day="bad">A hard one</button>
+    </div>
+    ${mark ? `<p class="tierlabel">Marked. Tap another to change it.</p>` : ''}
+    ${painOpen ? '' : '<div class="sheet-actions"><button class="btn" type="button" id="pain-open">Do a pain check</button></div>'}
+  </div>`;
+}
+
+/* His own signs, rated 0, 1 or 2. SPEC-domain: "The total is labeled as
+   Rikki's pain check, not a clinical score." */
+function painCard(events) {
+  if (!painOpen) return '';
+  const items = painItems(events);
+  return `<div class="card pain">
+    <span class="k">Your pain check \u00b7 about 20 seconds</span>
+    <p class="sync-lead">His own signs. Not seen, some, or clearly \u2014 whatever you can tell right now.</p>
+    ${items.map((label, i) => `<div class="painrow">
+      <p class="check-label">${esc(label)}</p>
+      <div class="chips">
+        ${[0, 1, 2].map((v) => `<button class="chip${painScores[i] === v ? ' primary' : ''}" type="button"
+          data-pain="${i}" data-pval="${v}">${['not seen', 'some', 'clearly'][v]}</button>`).join('')}
+      </div></div>`).join('')}
+    <div class="sheet-actions">
+      <button class="btn primary" type="button" id="pain-save">Save it</button>
+      <button class="btn" type="button" id="pain-cancel">Cancel</button>
+    </div>
+    <p class="tierlabel">This is your reading of his signs, not a clinical score. Nothing here recommends a dose.</p>
+  </div>`;
+}
 
 /* The thirty-second check from her own records. Due by elapsed time, so a
    "daily" check is once per 25.4-hour circle rather than per calendar day. */
@@ -296,7 +366,7 @@ async function doImport(file) {
 
 export function attach() {
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,[data-obs],[data-play],[data-check]');
+    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,#pain-open,#pain-skip,#pain-save,#pain-cancel,#export-csv,#export-json,[data-obs],[data-play],[data-check],[data-day],[data-pain]');
     if (!t) return;
     if (t.id === 'mic-start')    { startMic(); return; }
     if (t.id === 'mic-stop')     { stopMic(); return; }
@@ -304,6 +374,42 @@ export function attach() {
     if (t.id === 'pending-note') { commitPending(true); return; }
     if (t.id === 'pending-no')   { pending = null; onChange(); say('Proposal discarded. The recording is kept.'); return; }
     if (t.dataset.play)          { play(t.dataset.play); return; }
+    if (t.id === 'pain-open')   { painOpen = true; painScores = {}; onChange(); return; }
+    if (t.id === 'pain-cancel' || t.id === 'pain-skip') { painOpen = false; onChange(); return; }
+    if (t.dataset.pain != null) { painScores[t.dataset.pain] = Number(t.dataset.pval); onChange(); return; }
+    if (t.id === 'pain-save') {
+      const items = painItems(readEvents());
+      const { total, max } = scorePainCheck(painScores, items.length);
+      let outcome;
+      try {
+        const check = logEvent({ type: 'paincheck', scores: { ...painScores }, total, max, items });
+        outcome = `Saved: ${total} of ${max}.${isHighCheck(check) ? ' That is on the higher side of his own range.' : ''}`;
+      } catch (err) { outcome = `NOT SAVED \u2014 ${err.message}`; }
+      painOpen = false; painScores = {};
+      onChange(); say(outcome); return;
+    }
+    if (t.dataset.day) {
+      let outcome = 'Marked.';
+      try { logEvent({ type: 'dayMark', value: t.dataset.day }); }
+      catch (err) { outcome = `NOT SAVED \u2014 ${err.message}`; }
+      onChange(); say(outcome); return;
+    }
+    if (t.id === 'export-csv' || t.id === 'export-json') {
+      const csv = t.id === 'export-csv';
+      const body = csv ? asCsv(readEvents(), regimen) : JSON.stringify(exportPayload(readEvents(), regimen), null, 2);
+      const blob = new Blob([body], { type: csv ? 'text/csv' : 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      // The *.export.* name matches .gitignore, so a stray git add cannot
+      // publish Luke's log to the public repository.
+      a.download = csv ? 'luke.export.csv' : 'luke.export.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      markBackedUp();
+      onChange();
+      say(csv ? 'Saved as a spreadsheet. It opens in Numbers.' : 'Full backup saved.');
+      return;
+    }
     if (t.dataset.check) {
       const changed = t.dataset.cval === 'changed';
       let outcome = changed
