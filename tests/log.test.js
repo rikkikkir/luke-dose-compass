@@ -240,3 +240,70 @@ test('the Galliprant food finding is recorded, because it changes what he gets',
   assert.match(note.text, /4-fold/);
   assert.equal(note.tier, 'known');
 });
+
+/* ---------------------------------------------- his own laboratory history */
+
+import { latestLabs, labStatus, labGroup, currentWeightKg, STALE_DAYS } from '../store.js';
+
+const lab = (key, value, daysAgo, extra = {}) => ({
+  id: `lab-${key}-${daysAgo}`, seq: 1, type: 'lab', labKey: key, name: key,
+  value, unit: 'x', atUTC: T0 - daysAgo * 24 * HOUR, atOffset: 0,
+  loggedUTC: T0, loggedOffset: 0, source: 'compendium', ...extra,
+});
+
+test('the most recent value for each marker wins', () => {
+  const events = [lab('crea', 1.8, 300), lab('crea', 2.5, 15)];
+  assert.equal(latestLabs(events, T0).get('crea').value, 2.5);
+});
+
+test('a value is flagged against its own reference range, with an icon and a word', () => {
+  const high = labStatus(lab('crea', 2.5, 15, { refLow: 0.5, refHigh: 1.5 }), T0);
+  assert.equal(high.high, true);
+  assert.equal(high.word, 'above range');
+  assert.ok(high.icon, 'icon plus word, never colour alone (S4)');
+
+  const ok = labStatus(lab('phos', 2.9, 15, { refLow: 2.5, refHigh: 6.0 }), T0);
+  assert.equal(ok.word, 'in range');
+});
+
+test('an old value is marked stale rather than presented as current', () => {
+  // Luke's phosphorus is from March and his weight from before that. Showing
+  // either as "his level" would be wrong in a way nobody would notice.
+  assert.equal(labStatus(lab('phos', 2.9, 200), T0).stale, true);
+  assert.equal(labStatus(lab('crea', 2.5, 15), T0).stale, false);
+  assert.ok(STALE_DAYS >= 30 && STALE_DAYS <= 180);
+});
+
+test('weight comes back in kilograms, with its age attached', () => {
+  // A mg/kg figure computed against a seven-month-old weight is not a mg/kg
+  // figure, so the age has to travel with the number.
+  const events = [lab('weight', 79.1, 208, { valueKg: 35.88 })];
+  const w = currentWeightKg(events, T0);
+  assert.equal(w.kg, 35.88);
+  assert.ok(w.ageDays > 200);
+  assert.equal(w.stale, true);
+});
+
+test('no weight recorded returns nothing rather than a default dog', () => {
+  assert.equal(currentWeightKg([], T0), null);
+});
+
+test('markers are grouped by organ, and no story is attached to a group', () => {
+  // An earlier version grouped sodium, chloride, osmolality and haematocrit
+  // under "fluid balance" with a note pointing one way. Against the reference
+  // ranges in Luke's own records, three of those are in range and the fourth
+  // has no published range. Groups now carry no interpretation at all (S7).
+  const events = [
+    lab('crea', 2.5, 15, { refLow: 0.5, refHigh: 1.5 }),
+    lab('bun', 87, 15, { refLow: 9, refHigh: 31 }),
+    lab('buncrea', 34, 15, { refLow: 13, refHigh: 26 }),
+  ];
+  const g = labGroup('kidney', events, T0);
+  assert.equal(g.values.length, 3);
+  assert.equal(g.note, undefined, 'a group describes an organ, not a finding');
+  assert.equal(labGroup('hydration', events, T0), null, 'the invented group is gone');
+});
+
+test('a group with nothing recorded is absent, not empty', () => {
+  assert.equal(labGroup('kidney', [], T0), null);
+});
