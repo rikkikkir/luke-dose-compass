@@ -11,7 +11,7 @@
         is no signal, and when she is too tired to talk. */
 
 import { readEvents, logDose, logObservation, importEvents, recent, inOrder, liveEvents,
-         checksDue, carrotTrend, logEvent } from './store.js';
+         checksDue, logEvent } from './store.js';
 import { startRecording, recordingSupported, putAudio, getAudio } from './audio.js';
 import { parse, describe as describeParse } from './parse.js';
 
@@ -60,7 +60,6 @@ export function renderCapture(root) {
 
     ${mic}
     ${pendingCard()}
-    ${carrotCard(events)}
     ${checkCard(events)}
 
     <p class="k">Or tap</p>
@@ -125,35 +124,22 @@ function pendingCard() {
   </div>`;
 }
 
-/* His own quality-of-life meter, from her Watch List: a drop tends to come
-   hours to days before any other sign. It is the best leading indicator
-   anywhere in his records, so it sits at the top and is one tap. */
-function carrotCard(events) {
-  const t = carrotTrend(events);
-  const line = !t.enough
-    ? (t.today != null
-        ? `${t.today} so far this circle. ${t.samples} earlier circles counted \u2014 a few more and a drop will show.`
-        : 'Not counted yet this circle.')
-    : t.down
-      ? `<b>${t.today} so far, against about ${t.typical.toFixed(1)} on his recent circles.</b> Her records say a drop tends to come hours to days before any other sign.`
-      : `${t.today} so far, about his usual ${t.typical.toFixed(1)}.`;
+/* There WAS a carrot counter here, built on a line in her archives calling
+   carrot count "the household's quietest, most reliable signal".
 
-  return `<div class="card carrots${t.enough && t.down ? ' down' : ''}">
-    <span class="k">Carrots asked for</span>
-    <p class="carrot-line">${line}</p>
-    <div class="chips">
-      <button class="chip primary" type="button" data-carrot="1">+1 carrot</button>
-      <button class="chip" type="button" data-carrot="2">+2</button>
-      <button class="chip" type="button" data-carrot="5">+5</button>
-    </div>
-    <p class="tierlabel">From his Watch List \u00b7 his own signal, not a drug figure</p>
-  </div>`;
-}
+   Rikki: "that carrot count concept has been exaggerated in my archives. he
+   loves carrots. i dont count them he gets as many as he wants and he
+   pursues."
+
+   So the number was never real. What is real is the pursuing — a dog who
+   stops chasing the thing he loves is telling you something. That belongs in
+   the appetite check, in her words, as something to notice rather than a
+   figure to record. Counting was my invention, not her life. */
 
 /* The thirty-second check from her own records. Due by elapsed time, so a
    "daily" check is once per 25.4-hour circle rather than per calendar day. */
 function checkCard(events) {
-  const due = checksDue(events).filter((c) => c.def.checkKey !== 'carrots');
+  const due = checksDue(events);
   if (!due.length) return '';
   const waiting = due.filter((c) => c.due);
   if (!waiting.length) {
@@ -173,7 +159,7 @@ function checkCard(events) {
         <button class="btn" type="button" data-check="${esc(c.def.checkKey)}" data-cval="changed">Changed</button>
       </div>
     </div>`).join('')}
-    <p class="tierlabel">From his Watch List \u00b7 Thornwood record and her own notes</p>
+    <p class="tierlabel">From his Watch List \u2014 unconfirmed. That page mixes clinical record with written-up notes, and one claim on it turned out to be exaggerated. Worth checking each of these against what you actually do.</p>
   </div>`;
 }
 
@@ -310,7 +296,7 @@ async function doImport(file) {
 
 export function attach() {
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,[data-obs],[data-play],[data-carrot],[data-check]');
+    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,[data-obs],[data-play],[data-check]');
     if (!t) return;
     if (t.id === 'mic-start')    { startMic(); return; }
     if (t.id === 'mic-stop')     { stopMic(); return; }
@@ -318,12 +304,6 @@ export function attach() {
     if (t.id === 'pending-note') { commitPending(true); return; }
     if (t.id === 'pending-no')   { pending = null; onChange(); say('Proposal discarded. The recording is kept.'); return; }
     if (t.dataset.play)          { play(t.dataset.play); return; }
-    if (t.dataset.carrot) {
-      let outcome = 'Counted.';
-      try { logObservation('carrots', { value: Number(t.dataset.carrot) }); }
-      catch (err) { outcome = `NOT SAVED — ${err.message}`; }
-      onChange(); say(outcome); return;
-    }
     if (t.dataset.check) {
       const changed = t.dataset.cval === 'changed';
       let outcome = changed

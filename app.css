@@ -512,11 +512,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .lab.stale .lab-val, .lab.stale .lab-name { opacity: .6; }
 .lab.stale .lab-when { color: var(--warn); }
 
-/* ---- his own signal, and the thirty-second check -------------------------- */
-.card.carrots { border-left: 4px solid var(--ok); margin-bottom: 12px; }
-/* A drop is the signal, so a drop is what changes the card. */
-.card.carrots.down { border-left-color: var(--warn); background: var(--sunk); }
-.carrot-line { margin: 8px 0 12px; font-size: 15px; line-height: 1.5; }
+/* ---- the thirty-second check from her Watch List ------------------------- */
 .chip.primary { background: var(--accent); color: var(--onaccent); border-color: var(--accent); }
 
 .checkrow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start;
