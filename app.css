@@ -284,7 +284,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible {
    screens read as the same app. The prototype's data and drug schedules are
    fake and are not copied; only the look is. */
 
-.home-nav { display: flex; gap: 18px; margin-top: 22px; }
+.home-nav { display: flex; flex-wrap: wrap; justify-content: center;
+            gap: 6px 18px; margin-top: 22px; }
 .home-nav a { color: var(--accent); text-decoration: none; font-size: 16px; padding: 8px 4px; }
 
 #now h2, #log h2 { font-size: 21px; margin: 22px 0 4px; }
@@ -296,6 +297,18 @@ a:focus-visible, button:focus-visible, summary:focus-visible {
 .drugs { list-style: none; padding: 0; margin: 0; }
 .drug-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; margin-bottom: 11px; }
 .drug-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+/* The dot is a flex item, so a long name used to wrap to the next line and
+   leave the colour behind on its own — Hemp chew's name did exactly that at
+   phone width. The name keeps the dot's line and wraps its own text instead. */
+/* align-self, because align-items: center puts the dot between the two lines
+   of a name that wraps. It belongs on the first line, as on every other card.
+   The offset is in em so it follows the font rather than a fixed size. */
+.drug-head .dot { flex: none; align-self: flex-start; margin-top: .42em; }
+/* flex-basis must be 0, not auto: with auto the basis is the name's own width,
+   which does not fit beside the dot, so the whole name wrapped to the next line
+   and left the colour behind. At 0 it grows into whatever is left and wraps its
+   own text. */
+.drug-head .drug-name { flex: 1 1 0; min-width: 0; }
 .drug-name { font-weight: 600; font-size: 16px; }
 .also { color: var(--ink3); font-weight: 400; font-size: 14px; }
 .tag { font: 500 10px var(--mono); text-transform: uppercase; letter-spacing: .08em;
@@ -429,7 +442,6 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .understood { margin: 0 0 4px; padding-left: 20px; font-size: 15px; }
 .understood li { margin-bottom: 3px; }
 
-#import-file { display: block; margin: 10px 0; font-size: 13px; color: var(--ink2); }
 
 @media (prefers-reduced-motion: no-preference) {
   .mic.recording .mic-dot { animation: pulse 1.6s ease-in-out infinite; }
@@ -566,3 +578,19 @@ body.night {
   --bad: #E58C72;
 }
 body.night img, body.night .portrait { filter: brightness(.88) sepia(.12); }
+
+/* ---- photos and the quality-of-life scale --------------------------------- */
+.photo-btn { display: block; width: 100%; border: 1px dashed var(--line); background: var(--sunk);
+             border-radius: 12px; padding: 16px; text-align: center; cursor: pointer;
+             font: 600 15px var(--body); color: var(--ink); margin-bottom: 8px; }
+.photo-view { display: block; width: 100%; border-radius: 12px; margin-top: 14px;
+              border: 1px solid var(--line); }
+.chips.scale { gap: 5px; }
+.chip.num { min-width: 34px; padding: 7px 0; text-align: center; font-variant-numeric: tabular-nums; }
+.qol-note { margin: 12px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink2);
+            background: var(--sunk); border-radius: 8px; padding: 11px 13px; }
+.attach { display: flex; gap: 2px; }
+
+/* `hidden` means hidden. An author rule outranking the attribute is how a
+   file picker once appeared at the top of every screen. */
+[hidden] { display: none !important; }

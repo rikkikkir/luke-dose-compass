@@ -549,3 +549,86 @@ test('a spreadsheet can be saved, and it is named so git cannot publish it', asy
   expect(download.suggestedFilename()).toBe('luke.export.csv');
   await expect(page.locator('#toast')).toContainText('opens in Numbers');
 });
+
+test('the quality-of-life check-in asks seven questions and gives no verdict', async ({ page }) => {
+  await page.goto('/index.html#capture');
+  await page.locator('#qol-open').click();
+  await expect(page.locator('.painrow')).toHaveCount(7);
+  await expect(page.locator('.card.pain')).toContainText('Hurt');
+  await expect(page.locator('.card.pain')).toContainText('More good days than bad');
+
+  // It must never tell her it is time.
+  await expect(page.locator('.qol-note')).toContainText('never tell you it is time');
+  const text = await page.locator('.card.pain').innerText();
+  expect(text).not.toMatch(/\b(you should|consider euthan|it is time to)\b/i);
+
+  await page.locator('[data-qol="hurt"][data-qval="8"]').click();
+  await page.locator('[data-qol="hunger"][data-qval="7"]').click();
+  await expect(page.locator('.card.pain')).toContainText('2 of 7 answered');
+  await expect(page.locator('.card.pain')).toContainText('15');
+  await page.locator('#qol-save').click();
+  await expect(page.locator('#toast')).toContainText('15 of 70');
+});
+
+test('a photo can be attached, and appears in the log', async ({ page }) => {
+  // A 2x2 PNG is enough to prove the path: shrink, store, list, reopen.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==',
+    'base64');
+  await page.goto('/index.html#capture');
+  // Through the button, the way she would: the picker lives outside the screen
+  // that re-renders, so tapping has to reach it.
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#photo-open').click();
+  await (await chooser).setFiles({ name: 'luke.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#toast')).toContainText('Photo saved');
+  await expect(page.locator('#toast')).toContainText('stays on this device');
+  await expect(page.locator('[data-photo]')).toHaveCount(1);
+
+  await page.locator('[data-photo]').click();
+  await expect(page.locator('.photo-view')).toBeVisible();
+});
+
+/* WebKit cannot store a Blob or a File in IndexedDB — it fails the transaction,
+   and fails it with a null error, so nothing reached the screen. That store
+   holds her voice recordings as well as photos, and a recording she made while
+   giving Luke a dose is not something the app gets to lose in silence.
+   Everything is stored as bytes now. This runs in both engines on purpose. */
+test('a recording survives a round-trip through storage in this engine', async ({ page }) => {
+  await page.goto('/index.html');
+  const out = await page.evaluate(async () => {
+    const { putAudio, getAudio } = await import('./audio.js');
+    const bytes = new Uint8Array([0, 1, 2, 253, 254, 255]);
+    await putAudio('probe-1', new Blob([bytes], { type: 'audio/webm' }));
+    const back = await getAudio('probe-1');
+    return {
+      isBlob: back instanceof Blob,
+      type: back && back.type,
+      same: back ? [...new Uint8Array(await back.arrayBuffer())].join(',') : null,
+      missing: await getAudio('never-stored'),
+    };
+  });
+  expect(out.isBlob).toBe(true);
+  expect(out.type).toBe('audio/webm');
+  expect(out.same).toBe('0,1,2,253,254,255');
+  expect(out.missing).toBe(null);
+});
+
+/* The other seven import tests drive the hidden input directly, so none of them
+   touches the button she actually taps. Both pickers now live outside the
+   screen that re-renders, and reaching them is code that can break on its own. */
+test('the import button opens a picker and the file lands', async ({ page }) => {
+  const now = Date.now();
+  await page.goto('/index.html#capture');
+  await page.locator('#import-details summary').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#import-open').click();
+  await (await chooser).setFiles({
+    name: 'via-button.ndjson', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from(JSON.stringify({
+      id: 'btn-wake-1', seq: 1, type: 'wake', atUTC: now - 3 * 3600000, atOffset: -360,
+      loggedUTC: now - 3 * 3600000, loggedOffset: -360, source: 'oura',
+    })),
+  });
+  await expect(page.locator('#toast')).toContainText('Added 1');
+});

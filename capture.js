@@ -13,8 +13,9 @@
 import { readEvents, logDose, logObservation, importEvents, recent, inOrder, liveEvents,
          checksDue, logEvent, painItems, scorePainCheck, isHighCheck,
          opioidFollowUpDue, dayMark, backupDue, asCsv, markBackedUp,
-         exportPayload } from './store.js';
-import { startRecording, recordingSupported, putAudio, getAudio } from './audio.js';
+         exportPayload, HHHHHMM, scoreQol, qolChecks, why,
+} from './store.js';
+import { startRecording, recordingSupported, putAudio, getAudio, putMedia, getMedia, shrinkImage } from './audio.js';
 import { parse, describe as describeParse } from './parse.js';
 
 let regimen = null;
@@ -23,6 +24,8 @@ let pending = null;      // { parsed, audioId, blob, ms } waiting for her confir
 let onChange = () => {};
 let painOpen = false;
 let painScores = {};
+let qolOpen = false;
+let qolScores = {};
 
 /* Which expandable sections are open. Re-rendering rebuilds the markup, which
    would close them — so tapping one environment chip would collapse the very
@@ -67,7 +70,12 @@ export function renderCapture(root) {
     ${followUpCard(events)}
     ${dayCard(events)}
     ${painCard(events)}
+    ${qolCard(events)}
     ${checkCard(events)}
+
+    <p class="k">A picture</p>
+    <button class="photo-btn" type="button" id="photo-open">Take or choose a photo</button>
+    <p class="sync-lead">How he is standing, or a lump you are watching. A vet can act on a picture that words cannot carry.</p>
 
     <p class="k">Or tap</p>
     <div class="chips quick-adds">
@@ -115,7 +123,7 @@ export function renderCapture(root) {
     <details class="why" id="import-details"${open('import-details')}>
       <summary>Bring in a log from a file</summary>
       <p class="sync-lead">For getting an existing log onto this device. Nothing is overwritten — entries are added, and anything already here is left alone.</p>
-      <input type="file" id="import-file" accept=".json,.ndjson,.txt" aria-label="Log file">
+      <button class="btn" type="button" id="import-open">Choose a file</button>
     </details>`;
 }
 
@@ -206,6 +214,45 @@ function painCard(events) {
   </div>`;
 }
 
+/* The HHHHHMM scale. SPEC-domain: "The check-in never produces a verdict
+   (S7)." So this shows a total and the commonly cited figure, and says plainly
+   that it is a conversation rather than an answer. It will not tell her it is
+   time — that is not a thing software gets to say. */
+function qolCard(events) {
+  const past = qolChecks(events);
+  if (!qolOpen) {
+    const last = past[past.length - 1];
+    return `<div class="card">
+      <span class="k">Quality of life</span>
+      <p class="carrot-line">${last
+        ? `Last done ${Math.round((Date.now() - last.atUTC) / 86400000)} days ago \u2014 ${last.total} of ${last.outOf}.`
+        : 'Seven questions, whenever you want them. Not a test, and not something to do on a hard night.'}</p>
+      <div class="sheet-actions"><button class="btn" type="button" id="qol-open">Go through the seven</button></div>
+    </div>`;
+  }
+
+  const s = scoreQol(qolScores);
+  return `<div class="card pain">
+    <span class="k">Quality of life \u00b7 the HHHHHMM scale</span>
+    <p class="sync-lead">Dr Alice Villalobos's seven. One to ten each, where ten is as good as it could be.</p>
+    ${HHHHHMM.map((item) => `<div class="painrow">
+      <p class="check-label">${esc(item.name)}</p>
+      <p class="check-detail">${esc(item.ask)}</p>
+      <div class="chips scale">${Array.from({ length: 10 }, (_, i) => i + 1).map((v) =>
+        `<button class="chip num${qolScores[item.key] === v ? ' primary' : ''}" type="button"
+          data-qol="${item.key}" data-qval="${v}">${v}</button>`).join('')}</div>
+    </div>`).join('')}
+    <p class="carrot-line">${s.answered} of ${s.items} answered \u00b7 <b>${s.total}</b> so far, out of ${s.outOf}.</p>
+    <div class="sheet-actions">
+      <button class="btn primary" type="button" id="qol-save">Save it</button>
+      <button class="btn" type="button" id="qol-cancel">Cancel</button>
+    </div>
+    <p class="qol-note">${s.commonlyCited} and above is commonly read as an acceptable quality of life.
+      That is a starting point for a conversation with his vet, not a verdict.
+      <b>This app will never tell you it is time.</b></p>
+  </div>`;
+}
+
 /* The thirty-second check from her own records. Due by elapsed time, so a
    "daily" check is once per 25.4-hour circle rather than per calendar day. */
 function checkCard(events) {
@@ -248,11 +295,13 @@ function noteRow(e) {
     : e.type === 'weight' ? `Weighed ${e.value} kg`
     : ['where', 'weather', 'sleep', 'who', 'mood'].includes(e.type)
       ? `${({ where: 'Where', weather: 'Air', sleep: 'Slept', who: 'With', mood: 'Seemed' })[e.type]}: ${e.value}`
-      : (e.text || 'Note');
+      : (e.text || (e.photoId ? 'Photo' : 'Note'));
+  const attach = (e.audioId ? `<button class="x" type="button" data-play="${esc(e.audioId)}" aria-label="Play this recording">▶</button>` : '')
+    + (e.photoId ? `<button class="x" type="button" data-photo="${esc(e.photoId)}" aria-label="Open this photo">▣</button>` : '');
   return `<div class="entry">
     <span class="etime">${hh}:${mm}</span>
     <span>${esc(label)}${e.text && e.type !== 'note' ? ` <span class="unknown">${esc(e.text.slice(0, 80))}</span>` : ''}</span>
-    ${e.audioId ? `<button class="x" type="button" data-play="${esc(e.audioId)}" aria-label="Play this recording">▶</button>` : '<span></span>'}
+    <span class="attach">${attach}</span>
   </div>`;
 }
 
@@ -265,7 +314,7 @@ async function startMic() {
   } catch (err) {
     recorder = null;
     onChange();
-    say(err.message);               // says the buttons still work
+    say(why(err));               // says the buttons still work
   }
 }
 
@@ -323,7 +372,7 @@ function commitPending(asNoteOnly) {
       ? 'Saved as a note. The recording is attached.'
       : `Logged ${count} thing${count === 1 ? '' : 's'}. The recording is attached.`;
   } catch (err) {
-    outcome = `NOT SAVED — ${err.message}`;
+    outcome = `NOT SAVED — ${why(err)}`;
   }
   pending = null;
   onChange();      // re-render FIRST, then speak
@@ -343,6 +392,36 @@ async function play(id) {
   }
 }
 
+async function addPhoto(file) {
+  try {
+    const { blob, width, height } = await shrinkImage(file);
+    const photoId = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await putMedia(photoId, blob);
+    logObservation('note', { text: null, photoId });
+    onChange();
+    say(`Photo saved, ${width}\u00d7${height}. It stays on this device until you back up.`);
+  } catch (err) {
+    say(`Could not save that photo: ${why(err)}`);
+  }
+}
+
+async function showPhoto(id) {
+  try {
+    const blob = await getMedia(id);
+    if (!blob) { say('That photo is not on this device.'); return; }
+    const url = URL.createObjectURL(blob);
+    const box = document.getElementById('capture-body');
+    if (box) {
+      box.querySelectorAll('.photo-view').forEach((n) => n.remove());
+      const img = document.createElement('img');
+      img.src = url; img.className = 'photo-view'; img.alt = 'Photo from the log';
+      img.onload = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
+      box.appendChild(img);
+      img.scrollIntoView({ block: 'center' });
+    }
+  } catch { say('Could not open that photo.'); }
+}
+
 async function doImport(file) {
   try {
     const text = await file.text();
@@ -358,7 +437,7 @@ async function doImport(file) {
     onChange();   // re-render FIRST, then speak, or the message is wiped
     say(`Added ${r.added}. Already had ${r.alreadyHad}.${r.skipped ? ` Skipped ${r.skipped} unreadable.` : ''} ${r.total} in the log now.`);
   } catch (err) {
-    say(`Could not read that file: ${err.message}`);
+    say(`Could not read that file: ${why(err)}`);
   }
 }
 
@@ -366,7 +445,14 @@ async function doImport(file) {
 
 export function attach() {
   document.addEventListener('click', (ev) => {
-    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,#pain-open,#pain-skip,#pain-save,#pain-cancel,#export-csv,#export-json,[data-obs],[data-play],[data-check],[data-day],[data-pain]');
+    // The two pickers live outside this screen, so the buttons reach for them.
+    const opener = ev.target.closest('#photo-open,#import-open');
+    if (opener) {
+      const input = document.getElementById(opener.id === 'photo-open' ? 'photo-file' : 'import-file');
+      if (input) { input.value = ''; input.click(); }   // '' so the same file twice still fires
+      return;
+    }
+    const t = ev.target.closest('#mic-start,#mic-stop,#pending-yes,#pending-note,#pending-no,#weight-save,#pain-open,#pain-skip,#pain-save,#pain-cancel,#qol-open,#qol-save,#qol-cancel,#export-csv,#export-json,[data-obs],[data-play],[data-photo],[data-check],[data-day],[data-pain],[data-qol]');
     if (!t) return;
     if (t.id === 'mic-start')    { startMic(); return; }
     if (t.id === 'mic-stop')     { stopMic(); return; }
@@ -384,14 +470,29 @@ export function attach() {
       try {
         const check = logEvent({ type: 'paincheck', scores: { ...painScores }, total, max, items });
         outcome = `Saved: ${total} of ${max}.${isHighCheck(check) ? ' That is on the higher side of his own range.' : ''}`;
-      } catch (err) { outcome = `NOT SAVED \u2014 ${err.message}`; }
+      } catch (err) { outcome = `NOT SAVED \u2014 ${why(err)}`; }
       painOpen = false; painScores = {};
       onChange(); say(outcome); return;
     }
+    if (t.id === 'qol-open')   { qolOpen = true; qolScores = {}; onChange(); return; }
+    if (t.id === 'qol-cancel') { qolOpen = false; onChange(); return; }
+    if (t.dataset.qol) { qolScores[t.dataset.qol] = Number(t.dataset.qval); onChange(); return; }
+    if (t.id === 'qol-save') {
+      const sc = scoreQol(qolScores);
+      let outcome;
+      try {
+        logEvent({ type: 'qol', scores: { ...qolScores }, total: sc.total, outOf: sc.outOf,
+                   answered: sc.answered, complete: sc.complete });
+        outcome = `Saved: ${sc.total} of ${sc.outOf}${sc.complete ? '' : `, ${sc.answered} of ${sc.items} answered`}.`;
+      } catch (err) { outcome = `NOT SAVED \u2014 ${why(err)}`; }
+      qolOpen = false; qolScores = {};
+      onChange(); say(outcome); return;
+    }
+    if (t.dataset.photo) { showPhoto(t.dataset.photo); return; }
     if (t.dataset.day) {
       let outcome = 'Marked.';
       try { logEvent({ type: 'dayMark', value: t.dataset.day }); }
-      catch (err) { outcome = `NOT SAVED \u2014 ${err.message}`; }
+      catch (err) { outcome = `NOT SAVED \u2014 ${why(err)}`; }
       onChange(); say(outcome); return;
     }
     if (t.id === 'export-csv' || t.id === 'export-json') {
@@ -416,7 +517,7 @@ export function attach() {
         ? 'Marked as changed. Worth mentioning to his vet.'
         : 'Checked.';
       try { logEvent({ type: 'check', checkKey: t.dataset.check, value: t.dataset.cval }); }
-      catch (err) { outcome = `NOT SAVED — ${err.message}`; }
+      catch (err) { outcome = `NOT SAVED — ${why(err)}`; }
       onChange(); say(outcome); return;
     }
     if (t.id === 'weight-save') {
@@ -425,7 +526,7 @@ export function attach() {
       if (!kg || Number.isNaN(kg)) { say('Type a weight in kilograms first.'); return; }
       let outcome = `Weight recorded: ${kg} kg. Milligrams per kilogram now use this.`;
       try { logObservation('weight', { value: kg }); }
-      catch (err) { outcome = `NOT SAVED — ${err.message}`; }
+      catch (err) { outcome = `NOT SAVED — ${why(err)}`; }
       onChange();
       say(outcome);
       return;
@@ -433,7 +534,7 @@ export function attach() {
     if (t.dataset.obs) {
       let outcome = 'Logged.';
       try { logObservation(t.dataset.obs, { value: t.dataset.val }); }
-      catch (err) { outcome = `NOT SAVED — ${err.message}`; }
+      catch (err) { outcome = `NOT SAVED — ${why(err)}`; }
       onChange();
       say(outcome);
     }
@@ -447,9 +548,9 @@ export function attach() {
   }, true);
 
   document.addEventListener('change', (ev) => {
-    if (ev.target && ev.target.id === 'import-file' && ev.target.files && ev.target.files[0]) {
-      doImport(ev.target.files[0]);
-    }
+    if (!ev.target || !ev.target.files || !ev.target.files[0]) return;
+    if (ev.target.id === 'import-file') doImport(ev.target.files[0]);
+    if (ev.target.id === 'photo-file') addPhoto(ev.target.files[0]);
   });
 }
 

@@ -9,6 +9,7 @@ import {
   makeDose, makeMark, makeVoid, isLive, liveEvents, inOrder,
   lastDose, dosesInWindow, tabletsInWindow, checkAgainstMax,
   effectWindow, buildupState, bodyState, windowFor, limitsOf, HOUR,
+  makeObservation, why,
 } from '../store.js';
 
 import { readFileSync } from 'node:fs';
@@ -464,4 +465,74 @@ test('the CSV has a header, one row per event, and quotes what it must', () => {
   assert.match(lines[0], /^when,local time,what/);
   assert.match(lines[1], /Furosemide,3,120/, 'milligrams are worked out');
   assert.match(lines[2], /"he ate, then ""settled"", oddly"/, 'commas and quotes survive');
+});
+
+/* ------------------------------------------------------------ quality of life */
+
+import { HHHHHMM, scoreQol, qolChecks } from '../store.js';
+
+test('the seven are the seven', () => {
+  assert.equal(HHHHHMM.length, 7);
+  assert.deepEqual(HHHHHMM.map((i) => i.key),
+    ['hurt', 'hunger', 'hydration', 'hygiene', 'happiness', 'mobility', 'moregood']);
+  for (const i of HHHHHMM) assert.ok(i.ask.length > 10, `${i.key} needs a question, not a label`);
+});
+
+test('a part-finished check-in is scored as part-finished, not as a low score', () => {
+  // Answering three questions and stopping must not read as 3 out of 70.
+  const partial = scoreQol({ hurt: 8, hunger: 7, hydration: 9 });
+  assert.equal(partial.total, 24);
+  assert.equal(partial.answered, 3);
+  assert.equal(partial.complete, false);
+
+  const full = scoreQol(Object.fromEntries(HHHHHMM.map((i) => [i.key, 6])));
+  assert.equal(full.total, 42);
+  assert.equal(full.complete, true);
+  assert.equal(full.outOf, 70);
+});
+
+test('the commonly cited figure is carried, but never turned into a verdict', () => {
+  // SPEC-domain: "The check-in never produces a verdict (S7)."
+  const s = scoreQol(Object.fromEntries(HHHHHMM.map((i) => [i.key, 3])));
+  assert.equal(s.commonlyCited, 35);
+  assert.ok(!('verdict' in s) && !('acceptable' in s) && !('recommendation' in s),
+    'scoring returns numbers, and no judgement about them');
+});
+
+test('past check-ins come back oldest first, so a direction is visible', () => {
+  const mk = (total, msAgo) => ({ id: `q${msAgo}`, seq: msAgo, type: 'qol', total, outOf: 70,
+    atUTC: T0 - msAgo, atOffset: 0, loggedUTC: T0, loggedOffset: 0 });
+  const out = qolChecks([mk(52, 30 * 24 * HOUR), mk(44, 10 * 24 * HOUR)], T0);
+  assert.deepEqual(out.map((q) => q.total), [52, 44]);
+});
+
+/* makeObservation builds an explicit field list, so anything not named there is
+   dropped in silence. A photo was shrunk, stored in IndexedDB and logged — and
+   then never shown again, because photoId fell out here. */
+test('an observation keeps the id of an attached photo and recording', () => {
+  const o = makeObservation({ type: 'note', photoId: 'p1', audioId: 'a1' });
+  assert.equal(o.photoId, 'p1');
+  assert.equal(o.audioId, 'a1');
+  assert.equal(makeObservation({ type: 'note' }).photoId, null);
+});
+
+/* IndexedDB rejects with a null error, so `err.message` threw a second time
+   inside the catch and Rikki saw nothing at all. "NOT SAVED" with no reason is
+   the one message in this app that must never go missing. */
+test('why() gets a reason out of anything, including null', () => {
+  assert.equal(why(new Error('disk is full')), 'disk is full');
+  assert.equal(why('plain string'), 'plain string');
+  assert.equal(why({ name: 'AbortError' }), 'AbortError');
+  for (const bad of [null, undefined, {}, 0, new Error('')]) {
+    assert.equal(why(bad), 'the browser gave no reason');
+  }
+});
+
+/* A build-over-days drug with nothing logged has no buildup to report. It used
+   to return a "Not logged yet" phase, which the card printed in the accent
+   colour underneath the "Not logged yet" it already showed — the same words
+   three times, one of them looking like a finding. */
+test('a build-up drug with no doses reports nothing, not a phase', () => {
+  assert.equal(buildupState(drug('amantadine'), [], T0), null);
+  assert.equal(buildupState(drug('cosequin'), [], T0), null);
 });
